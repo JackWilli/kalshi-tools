@@ -1,0 +1,18 @@
+[project]
+name = "kalshi-market-maker"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "kalshi-python-async>=3.0.0",
+    "python-dotenv>=1.2.1",
+    "urllib3>=2.6.1",
+]
+
+[project.scripts]
+kalshi-lp-snapshot = "kalshi_lp.snapshot_cli:main"
+
+
+[tool.uv]
+package = true
