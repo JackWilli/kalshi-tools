@@ -1,18 +1,25 @@
 [project]
 name = "kalshi-market-maker"
 version = "0.1.0"
-description = "Add your description here"
+description = "Tooling for Kalshi"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "kalshi-python-async>=3.0.0",
+    "matplotlib>=3.8",
     "python-dotenv>=1.2.1",
     "urllib3>=2.6.1",
 ]
 
 [project.scripts]
 kalshi-lp-snapshot = "kalshi_lp.snapshot_cli:main"
-
+kalshi-lp-analyze = "kalshi_lp.analyze_cli:main"
+kalshi-lp-debug = "kalshi_lp.debug_cli:main"
+kalshi-lp-onesided = "kalshi_lp.onesided_cli:main"
+kalshi-lp-scale = "kalshi_lp.scale_cli:main"
 
 [tool.uv]
 package = true
+
+[dependency-groups]
+dev = ["pytest>=9.0"]

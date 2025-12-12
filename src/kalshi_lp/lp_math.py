@@ -57,6 +57,28 @@ def _compute_side_score(
     return my_score / total_score_all, ref_price, total_score_all, my_score
 
 
+def normalized_side_score_to_rewards(
+    normalized_side_score: float,
+    total_reward_pool: float
+) -> float:
+    """
+    Convert a normalized qualifying side score to expected dollar rewards.
+
+    Args:
+        normalized_side_score: Your share of one side (YES or NO), between 0-1
+        total_reward_pool: Total reward pool for entire market (both sides)
+
+    Returns:
+        Expected rewards in dollars
+
+    Note:
+        The reward pool is split 50/50 between YES and NO sides.
+        If you have a normalized qualifying side score of 0.10 (10% of YES side)
+        and the total pool is $100, you get 10% of $50 = $5.
+    """
+    return normalized_side_score * (total_reward_pool / 2)
+
+
 def compute_snapshot_lp_score(
     yes_levels: Sequence[Tuple[int, int]],
     no_levels: Sequence[Tuple[int, int]],
