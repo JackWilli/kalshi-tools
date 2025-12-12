@@ -1,7 +1,9 @@
 # tests/test_onesided.py
 """Unit tests for one-sided market making calculations."""
-import pytest
+
 from math import sqrt
+
+import pytest
 
 from kalshi_lp.onesided_cli import calculate_onesided_return
 
@@ -14,14 +16,14 @@ class TestCalculateOnesidedReturn:
         result = calculate_onesided_return(
             ticker="TEST",
             side="yes",
-            price=90,           # ¢ (cents)
-            your_prob=0.95,     # probability (0-1)
-            haircut=0.01,       # probability (0-1)
-            size=100,           # contracts
-            fill_prob=0.5,      # probability (0-1)
-            lp_score=0.10,      # fraction (0-1) - normalized side score
-            total_daily_pool=10.0,    # $/day (entire market, both sides)
-            lp_days=100         # days
+            price=90,  # ¢ (cents)
+            your_prob=0.95,  # probability (0-1)
+            haircut=0.01,  # probability (0-1)
+            size=100,  # contracts
+            fill_prob=0.5,  # probability (0-1)
+            lp_score=0.10,  # fraction (0-1) - normalized side score
+            total_daily_pool=10.0,  # $/day (entire market, both sides)
+            lp_days=100,  # days
         )
 
         # Capital = 90¢ * 100 contracts / 100 = $90
@@ -58,10 +60,10 @@ class TestCalculateOnesidedReturn:
             your_prob=0.95,
             haircut=0.01,
             size=100,
-            fill_prob=0.0,      # Never filled
+            fill_prob=0.0,  # Never filled
             lp_score=0.10,
             total_daily_pool=10.0,
-            lp_days=100
+            lp_days=100,
         )
 
         # Expected return = LP rewards only = $50 (pool split 50/50)
@@ -82,10 +84,10 @@ class TestCalculateOnesidedReturn:
             your_prob=0.95,
             haircut=0.01,
             size=100,
-            fill_prob=1.0,      # Always filled
+            fill_prob=1.0,  # Always filled
             lp_score=0.10,
             total_daily_pool=10.0,
-            lp_days=100
+            lp_days=100,
         )
 
         # Expected return = position_ev + lp_if_filled = 4 + 25 = $29
@@ -101,12 +103,12 @@ class TestCalculateOnesidedReturn:
             side="yes",
             price=90,
             your_prob=0.95,
-            haircut=0.0,        # No haircut
+            haircut=0.0,  # No haircut
             size=100,
             fill_prob=0.5,
             lp_score=0.10,
             total_daily_pool=10.0,
-            lp_days=100
+            lp_days=100,
         )
 
         assert result.adjusted_prob == 0.95
@@ -120,13 +122,13 @@ class TestCalculateOnesidedReturn:
             ticker="TEST",
             side="yes",
             price=90,
-            your_prob=0.91,     # After haircut will be 0.90
+            your_prob=0.91,  # After haircut will be 0.90
             haircut=0.01,
             size=100,
             fill_prob=0.5,
             lp_score=0.10,
             total_daily_pool=10.0,
-            lp_days=100
+            lp_days=100,
         )
 
         assert result.adjusted_prob == pytest.approx(0.90)
@@ -142,13 +144,13 @@ class TestCalculateOnesidedReturn:
             ticker="TEST",
             side="yes",
             price=90,
-            your_prob=0.88,     # After haircut will be 0.87
+            your_prob=0.88,  # After haircut will be 0.87
             haircut=0.01,
             size=100,
             fill_prob=0.5,
             lp_score=0.10,
             total_daily_pool=10.0,
-            lp_days=100
+            lp_days=100,
         )
 
         assert result.adjusted_prob == pytest.approx(0.87)
@@ -171,7 +173,7 @@ class TestCalculateOnesidedReturn:
             fill_prob=0.5,
             lp_score=0.10,
             total_daily_pool=10.0,
-            lp_days=100
+            lp_days=100,
         )
 
         # Variance = fill_prob * adj_prob * (1 - adj_prob) * size^2
@@ -194,7 +196,7 @@ class TestCalculateOnesidedReturn:
             fill_prob=0.5,
             lp_score=0.10,
             total_daily_pool=10.0,
-            lp_days=100
+            lp_days=100,
         )
 
         # Expected ROI = expected_return / capital = 39.5 / 90
@@ -212,14 +214,14 @@ class TestCalculateOnesidedReturn:
         result = calculate_onesided_return(
             ticker="TEST",
             side="no",
-            price=10,           # 10 cents (cheap NO side)
-            your_prob=0.95,     # 95% chance NO wins
+            price=10,  # 10 cents (cheap NO side)
+            your_prob=0.95,  # 95% chance NO wins
             haircut=0.02,
             size=10,
             fill_prob=0.8,
             lp_score=0.05,
             total_daily_pool=5.0,
-            lp_days=30
+            lp_days=30,
         )
 
         # Capital = 10 * 10 / 100 = $1
@@ -243,7 +245,7 @@ class TestCalculateOnesidedReturn:
             fill_prob=0.3,
             lp_score=0.20,
             total_daily_pool=20.0,
-            lp_days=60
+            lp_days=60,
         )
 
         # Verify input fields are echoed back

@@ -3,8 +3,8 @@ import asyncio
 import sys
 from typing import List
 
-from .kalshi_client import get_client, fetch_incentive_programs
-from .incentive_analyzer import analyze_market_opportunity, MarketOpportunity
+from .incentive_analyzer import MarketOpportunity, analyze_market_opportunity
+from .kalshi_client import fetch_incentive_programs, get_client
 
 
 def format_currency(amount: float) -> str:
@@ -25,25 +25,39 @@ def print_opportunity(opp: MarketOpportunity, rank: int):
 
     if best is None:
         print(f"\n{rank}. {opp.ticker} [NO VIABLE OPPORTUNITY]")
-        print(f"   Program Reward: {format_currency(opp.program.period_reward_dollars)} over {opp.program.total_days:.1f} days")
+        print(
+            f"   Program Reward: {format_currency(opp.program.period_reward_dollars)} over {opp.program.total_days:.1f} days",
+        )
         print(f"   Days Remaining: {opp.program.days_remaining:.1f}")
         print("   Neither side has sufficient liquidity or positive ROI")
         return
 
     print(f"\n{rank}. {opp.ticker} [{best.side.upper()} SIDE]")
-    print(f"   Program Reward: {format_currency(opp.program.period_reward_dollars)} over {opp.program.total_days:.1f} days")
+    print(
+        f"   Program Reward: {format_currency(opp.program.period_reward_dollars)} over {opp.program.total_days:.1f} days",
+    )
     print(f"   Days Remaining: {opp.program.days_remaining:.1f}")
     print(f"   Daily Pool: {format_currency(opp.program.daily_reward_pool)}/day")
-    print(f"   Remaining Rewards: {format_currency(opp.program.remaining_rewards_dollars)}")
+    print(
+        f"   Remaining Rewards: {format_currency(opp.program.remaining_rewards_dollars)}",
+    )
     print()
-    print(f"   Current Best {best.side.upper()} Price: {format_currency(best.current_best_price / 100.0) if best.current_best_price else 'N/A'}")
-    print(f"   Optimal Placement: {best.optimal_size} contracts @ {format_currency(best.optimal_price / 100.0) if best.optimal_price else 'N/A'}")
+    print(
+        f"   Current Best {best.side.upper()} Price: {format_currency(best.current_best_price / 100.0) if best.current_best_price else 'N/A'}",
+    )
+    print(
+        f"   Optimal Placement: {best.optimal_size} contracts @ {format_currency(best.optimal_price / 100.0) if best.optimal_price else 'N/A'}",
+    )
     print(f"   Capital Required: {format_currency(best.capital_required)}")
     print()
     print(f"   Expected LP Score: {best.expected_lp_score * 100:.2f}%")
-    print(f"   Expected Rewards: {format_currency(best.expected_rewards_total)} total ({format_currency(best.expected_rewards_per_day)}/day)")
+    print(
+        f"   Expected Rewards: {format_currency(best.expected_rewards_total)} total ({format_currency(best.expected_rewards_per_day)}/day)",
+    )
     print(f"   Gross ROI: {format_percent(best.roi_per_day)} per day")
-    print(f"   Adverse Selection: -{format_currency(best.adverse_selection_risk)}/day (est.)")
+    print(
+        f"   Adverse Selection: -{format_currency(best.adverse_selection_risk)}/day (est.)",
+    )
     print(f"   Net ROI: {format_percent(best.net_roi_per_day)} per day")
 
     # Show other side if also viable
@@ -51,8 +65,12 @@ def print_opportunity(opp: MarketOpportunity, rank: int):
     if other_side.is_viable():
         print()
         print(f"   Alternative ({other_side.side.upper()} side):")
-        print(f"     {other_side.optimal_size} contracts @ {format_currency(other_side.optimal_price / 100.0) if other_side.optimal_price else 'N/A'}")
-        print(f"     Capital: {format_currency(other_side.capital_required)}, Net ROI: {format_percent(other_side.net_roi_per_day)} per day")
+        print(
+            f"     {other_side.optimal_size} contracts @ {format_currency(other_side.optimal_price / 100.0) if other_side.optimal_price else 'N/A'}",
+        )
+        print(
+            f"     Capital: {format_currency(other_side.capital_required)}, Net ROI: {format_percent(other_side.net_roi_per_day)} per day",
+        )
 
 
 def print_portfolio_summary(opportunities: List[MarketOpportunity], top_n: int):
@@ -91,7 +109,9 @@ def print_portfolio_summary(opportunities: List[MarketOpportunity], top_n: int):
     print(f"Net Daily Rewards: {format_currency(net_daily_rewards)}")
     print(f"Average Net ROI: {format_percent(avg_net_roi)} per day")
     print()
-    print("Note: Adverse selection is estimated at 10% fill rate with 2-tick adverse move.")
+    print(
+        "Note: Adverse selection is estimated at 10% fill rate with 2-tick adverse move.",
+    )
     print("      Actual results will vary based on market conditions and execution.")
 
 
@@ -99,7 +119,7 @@ async def analyze_incentives(
     min_roi: float = 0.0,
     max_capital_per_side: float = 1000.0,
     top_n: int = 20,
-    show_all: bool = False
+    show_all: bool = False,
 ):
     """
     Main analysis function.
@@ -116,7 +136,7 @@ async def analyze_incentives(
 
     # Get client
     try:
-        client = await get_client()
+        client = get_client()
     except Exception as e:
         print("Error: Could not authenticate with Kalshi API")
         print(f"Details: {e}")
@@ -130,7 +150,11 @@ async def analyze_incentives(
         # Fetch active incentive programs
         print("Fetching active liquidity incentive programs...")
         try:
-            programs = await fetch_incentive_programs(client, status="active", incentive_type="liquidity")
+            programs = await fetch_incentive_programs(
+                client,
+                status="active",
+                incentive_type="liquidity",
+            )
         except Exception as e:
             print(f"Error fetching incentive programs: {e}")
             return
@@ -147,12 +171,15 @@ async def analyze_incentives(
         opportunities: List[MarketOpportunity] = []
 
         for i, program in enumerate(programs, 1):
-            print(f"  [{i}/{len(programs)}] Analyzing {program.market_ticker}...", end="\r")
+            print(
+                f"  [{i}/{len(programs)}] Analyzing {program.market_ticker}...",
+                end="\r",
+            )
             try:
                 opp = await analyze_market_opportunity(
                     client=client,
                     program=program,
-                    max_capital_per_side=max_capital_per_side
+                    max_capital_per_side=max_capital_per_side,
                 )
                 opportunities.append(opp)
             except Exception as e:
@@ -177,7 +204,7 @@ async def analyze_incentives(
                 if opp.get_best_analysis() is not None
                 else -999
             ),
-            reverse=True
+            reverse=True,
         )
 
         # Display results
@@ -203,41 +230,43 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Analyze Kalshi liquidity incentive opportunities"
+        description="Analyze Kalshi liquidity incentive opportunities",
     )
     parser.add_argument(
         "--min-roi",
         type=float,
         default=0.0,
-        help="Minimum net ROI per day to display (%%, default: 0.0)"
+        help="Minimum net ROI per day to display (%%, default: 0.0)",
     )
     parser.add_argument(
         "--max-capital",
         type=float,
         default=1000.0,
-        help="Maximum capital to simulate per side (default: $1000)"
+        help="Maximum capital to simulate per side (default: $1000)",
     )
     parser.add_argument(
         "--top-n",
         type=int,
         default=20,
-        help="Number of top opportunities to display (default: 20)"
+        help="Number of top opportunities to display (default: 20)",
     )
     parser.add_argument(
         "--show-all",
         action="store_true",
-        help="Show all markets including non-viable ones"
+        help="Show all markets including non-viable ones",
     )
 
     args = parser.parse_args()
 
     try:
-        asyncio.run(analyze_incentives(
-            min_roi=args.min_roi,
-            max_capital_per_side=args.max_capital,
-            top_n=args.top_n,
-            show_all=args.show_all
-        ))
+        asyncio.run(
+            analyze_incentives(
+                min_roi=args.min_roi,
+                max_capital_per_side=args.max_capital,
+                top_n=args.top_n,
+                show_all=args.show_all,
+            ),
+        )
     except KeyboardInterrupt:
         print("\nAnalysis interrupted by user")
         sys.exit(1)

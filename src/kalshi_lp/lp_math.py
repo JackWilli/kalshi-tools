@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, Sequence, Tuple, Optional, Dict, List
+from typing import Dict, List, Literal, Optional, Sequence, Tuple
 
 Side = Literal["yes", "no"]
 
@@ -7,8 +7,8 @@ Side = Literal["yes", "no"]
 @dataclass
 class LPOrder:
     side: Side
-    price: int      # cents
-    quantity: int   # resting size
+    price: int  # cents
+    quantity: int  # resting size
 
 
 def _compute_side_score(
@@ -59,7 +59,7 @@ def _compute_side_score(
 
 def normalized_side_score_to_rewards(
     normalized_side_score: float,
-    total_reward_pool: float
+    total_reward_pool: float,
 ) -> float:
     """
     Convert a normalized qualifying side score to expected dollar rewards.
@@ -90,10 +90,16 @@ def compute_snapshot_lp_score(
     my_no = [o for o in my_orders if o.side == "no"]
 
     yes_norm, yes_ref, yes_total, yes_mine = _compute_side_score(
-        yes_levels, my_yes, target_size, discount_factor
+        yes_levels,
+        my_yes,
+        target_size,
+        discount_factor,
     )
     no_norm, no_ref, no_total, no_mine = _compute_side_score(
-        no_levels, my_no, target_size, discount_factor
+        no_levels,
+        my_no,
+        target_size,
+        discount_factor,
     )
 
     if yes_total == 0 and no_total == 0:

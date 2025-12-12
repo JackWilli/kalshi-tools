@@ -5,6 +5,7 @@ Scale analysis for one-sided market making.
 Analyzes how ROI changes as position size increases, showing diminishing
 returns from LP score dilution.
 """
+
 import argparse
 import asyncio
 import sys
@@ -13,40 +14,43 @@ from typing import List
 
 import matplotlib.pyplot as plt
 
-from .kalshi_client import get_client, fetch_incentive_programs, fetch_orderbook
 from .incentive_analyzer import calculate_marginal_lp_score
+from .kalshi_client import fetch_incentive_programs, fetch_orderbook, get_client
+from .lp_math import Side
 from .onesided_cli import calculate_onesided_return
 
 
 @dataclass
 class ScalePoint:
     """Analysis at a specific position size."""
-    size: int                    # contracts
-    capital: float               # $
-    lp_score: float              # fraction (0-1)
-    expected_return: float       # $
-    expected_roi: float          # ratio
-    annualized_roi: float        # ratio
-    marginal_roi: float          # ratio - ROI on incremental capital
+
+    size: int  # contracts
+    capital: float  # $
+    lp_score: float  # fraction (0-1)
+    expected_return: float  # $
+    expected_roi: float  # ratio
+    annualized_roi: float  # ratio
+    marginal_roi: float  # ratio - ROI on incremental capital
 
 
 @dataclass
 class ScaleAnalysis:
     """Complete scaling analysis for a market."""
+
     ticker: str
-    side: str
+    side: Side
     your_prob: float
     haircut: float
     fill_prob: float
-    price: int                   # ¢
-    total_daily_pool: float      # $/day (for entire market, both sides)
-    lp_days: float               # days
+    price: int  # ¢
+    total_daily_pool: float  # $/day (for entire market, both sides)
+    lp_days: float  # days
     points: List[ScalePoint]
 
 
 def calculate_scale_analysis(
     ticker: str,
-    side: str,
+    side: Side,
     price: int,
     your_prob: float,
     haircut: float,
@@ -57,7 +61,7 @@ def calculate_scale_analysis(
     target_size: int,
     discount_factor: float,
     max_size: int,
-    num_points: int = 20
+    num_points: int = 20,
 ) -> ScaleAnalysis:
     """
     Calculate ROI at different position sizes.
@@ -105,7 +109,7 @@ def calculate_scale_analysis(
             new_size=size,
             target_size=target_size,
             discount_factor=discount_factor,
-            side=side
+            side=side,
         )
 
         # Get full analysis
@@ -119,23 +123,27 @@ def calculate_scale_analysis(
             fill_prob=fill_prob,
             lp_score=lp_score,
             total_daily_pool=total_daily_pool,
-            lp_days=lp_days
+            lp_days=lp_days,
         )
 
         # Calculate marginal ROI (return on incremental capital)
         marginal_return = analysis.expected_return - prev_return
         marginal_capital = analysis.capital - prev_capital
-        marginal_roi = marginal_return / marginal_capital if marginal_capital > 0 else 0.0
+        marginal_roi = (
+            marginal_return / marginal_capital if marginal_capital > 0 else 0.0
+        )
 
-        points.append(ScalePoint(
-            size=size,
-            capital=analysis.capital,
-            lp_score=lp_score,
-            expected_return=analysis.expected_return,
-            expected_roi=analysis.expected_roi,
-            annualized_roi=analysis.annualized_roi,
-            marginal_roi=marginal_roi
-        ))
+        points.append(
+            ScalePoint(
+                size=size,
+                capital=analysis.capital,
+                lp_score=lp_score,
+                expected_return=analysis.expected_return,
+                expected_roi=analysis.expected_roi,
+                annualized_roi=analysis.annualized_roi,
+                marginal_roi=marginal_roi,
+            ),
+        )
 
         prev_return = analysis.expected_return
         prev_capital = analysis.capital
@@ -149,7 +157,7 @@ def calculate_scale_analysis(
         price=price,
         total_daily_pool=total_daily_pool,
         lp_days=lp_days,
-        points=points
+        points=points,
     )
 
 
@@ -158,20 +166,28 @@ def print_table(analysis: ScaleAnalysis):
     print(f"\n{'=' * 80}")
     print(f"Scale Analysis: {analysis.ticker} ({analysis.side.upper()})")
     print(f"{'=' * 80}")
-    print(f"Price: {analysis.price}¢ | Your prob: {analysis.your_prob*100:.0f}% | "
-          f"Haircut: {analysis.haircut*100:.0f}% | Fill prob: {analysis.fill_prob*100:.0f}%")
-    print(f"LP Program: ${analysis.total_daily_pool:.2f}/day total pool, {analysis.lp_days:.0f} days remaining")
+    print(
+        f"Price: {analysis.price}¢ | Your prob: {analysis.your_prob * 100:.0f}% | "
+        f"Haircut: {analysis.haircut * 100:.0f}% | Fill prob: {analysis.fill_prob * 100:.0f}%",
+    )
+    print(
+        f"LP Program: ${analysis.total_daily_pool:.2f}/day total pool, {analysis.lp_days:.0f} days remaining",
+    )
     print()
 
     # Table header
-    print(f"{'Size':>8} {'Capital':>10} {'LP Score':>10} {'Exp Return':>12} "
-          f"{'ROI':>10} {'Ann ROI':>10} {'Marg ROI':>10}")
+    print(
+        f"{'Size':>8} {'Capital':>10} {'LP Score':>10} {'Exp Return':>12} "
+        f"{'ROI':>10} {'Ann ROI':>10} {'Marg ROI':>10}",
+    )
     print("-" * 82)
 
     for p in analysis.points:
-        print(f"{p.size:>8} {f'${p.capital:.2f}':>10} {f'{p.lp_score*100:.2f}%':>10} "
-              f"{f'${p.expected_return:.2f}':>12} {f'{p.expected_roi*100:.1f}%':>10} "
-              f"{f'{p.annualized_roi*100:.1f}%':>10} {f'{p.marginal_roi*100:.1f}%':>10}")
+        print(
+            f"{p.size:>8} {f'${p.capital:.2f}':>10} {f'{p.lp_score * 100:.2f}%':>10} "
+            f"{f'${p.expected_return:.2f}':>12} {f'{p.expected_roi * 100:.1f}%':>10} "
+            f"{f'{p.annualized_roi * 100:.1f}%':>10} {f'{p.marginal_roi * 100:.1f}%':>10}",
+        )
     print()
 
 
@@ -185,44 +201,51 @@ def plot_analysis(analysis: ScaleAnalysis):
     marginal_rois = [p.marginal_roi * 100 for p in analysis.points]
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    fig.suptitle(f"Scale Analysis: {analysis.ticker} ({analysis.side.upper()})\n"
-                 f"Price: {analysis.price}¢ | Prob: {analysis.your_prob*100:.0f}% | "
-                 f"Haircut: {analysis.haircut*100:.0f}% | Fill: {analysis.fill_prob*100:.0f}%",
-                 fontsize=12)
+    fig.suptitle(
+        f"Scale Analysis: {analysis.ticker} ({analysis.side.upper()})\n"
+        f"Price: {analysis.price}¢ | Prob: {analysis.your_prob * 100:.0f}% | "
+        f"Haircut: {analysis.haircut * 100:.0f}% | Fill: {analysis.fill_prob * 100:.0f}%",
+        fontsize=12,
+    )
 
     # Plot 1: LP Score vs Size
     ax1 = axes[0, 0]
-    ax1.plot(sizes, lp_scores, 'b-o', markersize=4)
-    ax1.set_xlabel('Position Size (contracts)')
-    ax1.set_ylabel('LP Score (%)')
-    ax1.set_title('LP Score vs Position Size')
+    ax1.plot(sizes, lp_scores, "b-o", markersize=4)
+    ax1.set_xlabel("Position Size (contracts)")
+    ax1.set_ylabel("LP Score (%)")
+    ax1.set_title("LP Score vs Position Size")
     ax1.grid(True, alpha=0.3)
 
     # Plot 2: Expected ROI vs Size
     ax2 = axes[0, 1]
-    ax2.plot(sizes, rois, 'g-o', markersize=4, label='Period ROI')
-    ax2.plot(sizes, ann_rois, 'g--', alpha=0.5, label='Annualized ROI')
-    ax2.set_xlabel('Position Size (contracts)')
-    ax2.set_ylabel('ROI (%)')
-    ax2.set_title('Expected ROI vs Position Size')
+    ax2.plot(sizes, rois, "g-o", markersize=4, label="Period ROI")
+    ax2.plot(sizes, ann_rois, "g--", alpha=0.5, label="Annualized ROI")
+    ax2.set_xlabel("Position Size (contracts)")
+    ax2.set_ylabel("ROI (%)")
+    ax2.set_title("Expected ROI vs Position Size")
     ax2.legend()
     ax2.grid(True, alpha=0.3)
 
     # Plot 3: Marginal ROI vs Size
     ax3 = axes[1, 0]
-    ax3.plot(sizes, marginal_rois, 'r-o', markersize=4)
-    ax3.axhline(y=0, color='k', linestyle='-', alpha=0.3)
-    ax3.set_xlabel('Position Size (contracts)')
-    ax3.set_ylabel('Marginal ROI (%)')
-    ax3.set_title('Marginal ROI vs Position Size (diminishing returns)')
+    ax3.plot(sizes, marginal_rois, "r-o", markersize=4)
+    ax3.axhline(y=0, color="k", linestyle="-", alpha=0.3)
+    ax3.set_xlabel("Position Size (contracts)")
+    ax3.set_ylabel("Marginal ROI (%)")
+    ax3.set_title("Marginal ROI vs Position Size (diminishing returns)")
     ax3.grid(True, alpha=0.3)
 
     # Plot 4: Expected Return vs Capital
     ax4 = axes[1, 1]
-    ax4.plot(capitals, [p.expected_return for p in analysis.points], 'm-o', markersize=4)
-    ax4.set_xlabel('Capital Deployed ($)')
-    ax4.set_ylabel('Expected Return ($)')
-    ax4.set_title('Expected Return vs Capital')
+    ax4.plot(
+        capitals,
+        [p.expected_return for p in analysis.points],
+        "m-o",
+        markersize=4,
+    )
+    ax4.set_xlabel("Capital Deployed ($)")
+    ax4.set_ylabel("Expected Return ($)")
+    ax4.set_title("Expected Return vs Capital")
     ax4.grid(True, alpha=0.3)
 
     plt.tight_layout()
@@ -231,18 +254,22 @@ def plot_analysis(analysis: ScaleAnalysis):
 
 async def run_scale_analysis(
     ticker: str,
-    side: str,
+    side: Side,
     your_prob: float,
     haircut: float,
     fill_prob: float,
     max_size: int,
-    num_points: int = 20
+    num_points: int = 20,
 ) -> ScaleAnalysis:
     """Fetch market data and run scale analysis."""
-    client = await get_client()
+    client = get_client()
     try:
         # 1. Find LP program for this ticker
-        programs = await fetch_incentive_programs(client, status="active", incentive_type="liquidity")
+        programs = await fetch_incentive_programs(
+            client,
+            status="active",
+            incentive_type="liquidity",
+        )
         program = next((p for p in programs if p.market_ticker == ticker), None)
 
         if program is None:
@@ -272,7 +299,7 @@ async def run_scale_analysis(
             target_size=program.target_size,
             discount_factor=program.discount_factor,
             max_size=max_size,
-            num_points=num_points
+            num_points=num_points,
         )
     finally:
         await client.close()
@@ -281,18 +308,15 @@ async def run_scale_analysis(
 def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Analyze how ROI scales with position size for one-sided market making"
+        description="Analyze how ROI scales with position size for one-sided market making",
     )
 
     # Required positional arguments
-    parser.add_argument(
-        "ticker",
-        help="Market ticker (e.g., KXSENATELA-26NOV-R)"
-    )
+    parser.add_argument("ticker", help="Market ticker (e.g., KXSENATELA-26NOV-R)")
     parser.add_argument(
         "side",
         choices=["yes", "no"],
-        help="Which side to buy (yes or no)"
+        help="Which side to buy (yes or no)",
     )
 
     # Optional arguments with defaults
@@ -300,36 +324,36 @@ def main():
         "--your-prob",
         type=float,
         default=0.95,
-        help="Your probability belief (0-1, default: 0.95)"
+        help="Your probability belief (0-1, default: 0.95)",
     )
     parser.add_argument(
         "--haircut",
         type=float,
         default=0.01,
-        help="Probability reduction if filled (default: 0.01)"
+        help="Probability reduction if filled (default: 0.01)",
     )
     parser.add_argument(
         "--fill-prob",
         type=float,
         default=0.5,
-        help="Probability of getting filled (default: 0.5)"
+        help="Probability of getting filled (default: 0.5)",
     )
     parser.add_argument(
         "--max-size",
         type=int,
         default=1000,
-        help="Maximum position size to analyze (default: 1000)"
+        help="Maximum position size to analyze (default: 1000)",
     )
     parser.add_argument(
         "--points",
         type=int,
         default=20,
-        help="Number of data points to calculate (default: 20)"
+        help="Number of data points to calculate (default: 20)",
     )
     parser.add_argument(
         "--no-plot",
         action="store_true",
-        help="Skip plotting, only show table"
+        help="Skip plotting, only show table",
     )
 
     args = parser.parse_args()
@@ -349,15 +373,17 @@ def main():
         sys.exit(1)
 
     try:
-        analysis = asyncio.run(run_scale_analysis(
-            ticker=args.ticker,
-            side=args.side,
-            your_prob=args.your_prob,
-            haircut=args.haircut,
-            fill_prob=args.fill_prob,
-            max_size=args.max_size,
-            num_points=args.points
-        ))
+        analysis = asyncio.run(
+            run_scale_analysis(
+                ticker=args.ticker,
+                side=args.side,
+                your_prob=args.your_prob,
+                haircut=args.haircut,
+                fill_prob=args.fill_prob,
+                max_size=args.max_size,
+                num_points=args.points,
+            ),
+        )
 
         print_table(analysis)
 

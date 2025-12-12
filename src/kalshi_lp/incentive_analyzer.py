@@ -1,16 +1,22 @@
 # src/kalshi_lp/incentive_analyzer.py
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 from kalshi_python_async import KalshiClient
 
-from .kalshi_client import IncentiveProgram, fetch_orderbook, fetch_my_resting_bids
-from .lp_math import Side, LPOrder, _compute_side_score, normalized_side_score_to_rewards
+from .kalshi_client import IncentiveProgram, fetch_my_resting_bids, fetch_orderbook
+from .lp_math import (
+    LPOrder,
+    Side,
+    _compute_side_score,
+    normalized_side_score_to_rewards,
+)
 
 
 @dataclass
 class SideAnalysis:
     """Analysis for one side of a market (YES or NO)."""
+
     side: Side
     current_best_price: Optional[int]  # cents (None if no liquidity)
     optimal_price: Optional[int]  # cents (where to place order)
@@ -26,16 +32,17 @@ class SideAnalysis:
     def is_viable(self) -> bool:
         """Check if this side has viable opportunity."""
         return (
-            self.optimal_price is not None and
-            self.optimal_size > 0 and
-            self.capital_required > 0 and
-            self.net_roi_per_day > 0
+            self.optimal_price is not None
+            and self.optimal_size > 0
+            and self.capital_required > 0
+            and self.net_roi_per_day > 0
         )
 
 
 @dataclass
 class MarketOpportunity:
     """Complete analysis for a market."""
+
     ticker: str
     program: IncentiveProgram
     yes_side: SideAnalysis
@@ -57,7 +64,7 @@ def estimate_adverse_selection(
     size: int,
     side: Side,
     fill_rate: float = 0.10,
-    adverse_ticks: int = 2
+    adverse_ticks: int = 2,
 ) -> float:
     """
     Estimate adverse selection cost in $/day.
@@ -89,7 +96,7 @@ def calculate_marginal_lp_score(
     new_size: int,
     target_size: int,
     discount_factor: float,
-    side: Side
+    side: Side,
 ) -> float:
     """
     Calculate LP score if we add a new order.
@@ -127,7 +134,7 @@ def calculate_marginal_lp_score(
         side_levels=updated_levels,  # Include our order in total pool
         my_orders=simulated_orders,
         target_size=target_size,
-        discount_factor=discount_factor
+        discount_factor=discount_factor,
     )
 
     return normalized_score
@@ -140,7 +147,7 @@ def optimize_side_placement(
     discount_factor: float,
     max_capital: float,
     side: Side,
-    is_buy: bool = True
+    is_buy: bool = True,
 ) -> Tuple[Optional[int], int, float]:
     """
     Find optimal (price, size) to maximize LP score per dollar deployed.
@@ -165,7 +172,9 @@ def optimize_side_placement(
     best_price = sorted_levels[0][0]
 
     # Try different price levels (best bid, best-1, best-2, etc.)
-    best_placement: Optional[Tuple[int, int, float, float]] = None  # (price, size, score, score_per_dollar)
+    best_placement: Optional[Tuple[int, int, float, float]] = (
+        None  # (price, size, score, score_per_dollar)
+    )
 
     for price_offset in range(0, min(10, best_price)):  # Try up to 10 ticks away
         price = best_price - price_offset
@@ -199,7 +208,7 @@ def optimize_side_placement(
                 new_size=size,
                 target_size=target_size,
                 discount_factor=discount_factor,
-                side=side
+                side=side,
             )
 
             if lp_score <= 0:
@@ -224,7 +233,7 @@ async def analyze_side(
     side: Side,
     side_levels: List[Tuple[int, int]],
     my_existing_orders: List[LPOrder],
-    max_capital: float = 1000.0
+    max_capital: float = 1000.0,
 ) -> SideAnalysis:
     """
     Analyze one side of a market.
@@ -253,7 +262,7 @@ async def analyze_side(
         discount_factor=program.discount_factor,
         max_capital=max_capital,
         side=side,
-        is_buy=True
+        is_buy=True,
     )
 
     # Calculate metrics
@@ -272,9 +281,12 @@ async def analyze_side(
         # Note: expected_lp_score is a normalized qualifying side score
         expected_rewards_total = normalized_side_score_to_rewards(
             expected_lp_score,
-            program.remaining_rewards_dollars
+            program.remaining_rewards_dollars,
         )
-        expected_rewards_per_day = expected_rewards_total / max(program.days_remaining, 1)
+        expected_rewards_per_day = expected_rewards_total / max(
+            program.days_remaining,
+            1,
+        )
 
         # ROI per day (%)
         if capital_required > 0:
@@ -284,7 +296,7 @@ async def analyze_side(
         adverse_selection_risk = estimate_adverse_selection(
             price=optimal_price,
             size=optimal_size,
-            side=side
+            side=side,
         )
 
         # Net ROI per day (after adverse selection)
@@ -303,14 +315,14 @@ async def analyze_side(
         capital_required=capital_required,
         roi_per_day=roi_per_day,
         adverse_selection_risk=adverse_selection_risk,
-        net_roi_per_day=net_roi_per_day
+        net_roi_per_day=net_roi_per_day,
     )
 
 
 async def analyze_market_opportunity(
     client: KalshiClient,
     program: IncentiveProgram,
-    max_capital_per_side: float = 1000.0
+    max_capital_per_side: float = 1000.0,
 ) -> MarketOpportunity:
     """
     Analyze a market's liquidity incentive opportunity.
@@ -338,7 +350,7 @@ async def analyze_market_opportunity(
         side="yes",
         side_levels=yes_levels,
         my_existing_orders=my_yes_orders,
-        max_capital=max_capital_per_side
+        max_capital=max_capital_per_side,
     )
 
     no_analysis = await analyze_side(
@@ -347,14 +359,18 @@ async def analyze_market_opportunity(
         side="no",
         side_levels=no_levels,
         my_existing_orders=my_no_orders,
-        max_capital=max_capital_per_side
+        max_capital=max_capital_per_side,
     )
 
     # Determine best side
     best_side: Optional[Side] = None
     if yes_analysis.is_viable() and no_analysis.is_viable():
         # Both sides viable, choose higher net ROI
-        best_side = "yes" if yes_analysis.net_roi_per_day > no_analysis.net_roi_per_day else "no"
+        best_side = (
+            "yes"
+            if yes_analysis.net_roi_per_day > no_analysis.net_roi_per_day
+            else "no"
+        )
     elif yes_analysis.is_viable():
         best_side = "yes"
     elif no_analysis.is_viable():
@@ -373,5 +389,5 @@ async def analyze_market_opportunity(
         yes_side=yes_analysis,
         no_side=no_analysis,
         best_side=best_side,
-        recommended_capital=recommended_capital
+        recommended_capital=recommended_capital,
     )

@@ -1,11 +1,12 @@
-    # src/kalshi_lp/kalshi_client.py
+# src/kalshi_lp/kalshi_client.py
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 from dotenv import load_dotenv
 from kalshi_python_async import Configuration, KalshiClient
+
 from .lp_math import LPOrder, Side
 
 load_dotenv()
@@ -14,6 +15,7 @@ load_dotenv()
 @dataclass
 class IncentiveProgram:
     """Represents a Kalshi liquidity incentive program."""
+
     id: str
     market_ticker: str
     start_date: datetime
@@ -46,7 +48,7 @@ class IncentiveProgram:
         return self.daily_reward_pool * self.days_remaining
 
 
-async def get_client() -> KalshiClient:
+def get_client() -> KalshiClient:
     api_key_id = os.environ["KALSHI_API_KEY_ID"]
     key_path = os.environ["KALSHI_PRIVATE_KEY_PATH"]
 
@@ -77,7 +79,10 @@ async def verify_market_exists(client: KalshiClient, ticker: str) -> bool:
         return False
 
 
-async def fetch_orderbook(client: KalshiClient, ticker: str) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+async def fetch_orderbook(
+    client: KalshiClient,
+    ticker: str,
+) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
     ob_resp = await client.get_market_orderbook(ticker=ticker)
 
     # Debug: Print raw data to verify what the API actually returns
@@ -89,7 +94,9 @@ async def fetch_orderbook(client: KalshiClient, ticker: str) -> Tuple[List[Tuple
 
     # Convert price from dollars (string) to cents (int), quantity is already int
     # Price comes as string like '0.0100' representing $0.01 (1 cent)
-    yes_levels = [(int(float(p) * 100), int(q)) for p, q in ob_resp.orderbook.yes_dollars]
+    yes_levels = [
+        (int(float(p) * 100), int(q)) for p, q in ob_resp.orderbook.yes_dollars
+    ]
     no_levels = [(int(float(p) * 100), int(q)) for p, q in ob_resp.orderbook.no_dollars]
     return yes_levels, no_levels
 
@@ -128,7 +135,7 @@ async def fetch_my_resting_bids(
                 side=side,
                 price=price,
                 quantity=o.remaining_count,
-            )
+            ),
         )
 
     return orders
@@ -137,7 +144,7 @@ async def fetch_my_resting_bids(
 async def fetch_incentive_programs(
     client: KalshiClient,
     status: str = "active",
-    incentive_type: str = "liquidity"
+    incentive_type: str = "liquidity",
 ) -> List[IncentiveProgram]:
     """
     Fetch liquidity incentive programs from Kalshi API.
@@ -161,16 +168,14 @@ async def fetch_incentive_programs(
                 response = await client.get_incentive_programs(
                     status=status,
                     limit=100,
-                    cursor=cursor
+                    cursor=cursor,
                 )
             else:
-                response = await client.get_incentive_programs(
-                    status=status,
-                    limit=100
-                )
+                response = await client.get_incentive_programs(status=status, limit=100)
         except Exception as e:
             print(f"Error fetching incentive programs: {e}")
             import traceback
+
             traceback.print_exc()
             break
 
@@ -188,12 +193,16 @@ async def fetch_incentive_programs(
                 if isinstance(prog.start_date, datetime):
                     start_date = prog.start_date
                 else:
-                    start_date = datetime.fromisoformat(prog.start_date.replace('Z', '+00:00'))
+                    start_date = datetime.fromisoformat(
+                        prog.start_date.replace("Z", "+00:00"),
+                    )
 
                 if isinstance(prog.end_date, datetime):
                     end_date = prog.end_date
                 else:
-                    end_date = datetime.fromisoformat(prog.end_date.replace('Z', '+00:00'))
+                    end_date = datetime.fromisoformat(
+                        prog.end_date.replace("Z", "+00:00"),
+                    )
 
                 # Calculate days remaining
                 now = datetime.now(start_date.tzinfo)
@@ -207,24 +216,27 @@ async def fetch_incentive_programs(
                 # Use target_size or default
                 target_size = prog.target_size if prog.target_size is not None else 1000
 
-                programs.append(IncentiveProgram(
-                    id=prog.id,
-                    market_ticker=prog.market_ticker,
-                    start_date=start_date,
-                    end_date=end_date,
-                    period_reward=prog.period_reward,
-                    discount_factor=discount_factor,
-                    target_size=target_size,
-                    days_remaining=days_remaining
-                ))
+                programs.append(
+                    IncentiveProgram(
+                        id=prog.id,
+                        market_ticker=prog.market_ticker,
+                        start_date=start_date,
+                        end_date=end_date,
+                        period_reward=prog.period_reward,
+                        discount_factor=discount_factor,
+                        target_size=target_size,
+                        days_remaining=days_remaining,
+                    ),
+                )
             except Exception as e:
                 print(f"Error parsing program {getattr(prog, 'id', 'unknown')}: {e}")
                 import traceback
+
                 traceback.print_exc()
                 continue
 
         # Check for next page
-        cursor = getattr(response, 'next_cursor', None)
+        cursor = getattr(response, "next_cursor", None)
         if not cursor:
             break
 

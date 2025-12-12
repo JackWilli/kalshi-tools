@@ -11,6 +11,9 @@ dependencies = [
     "urllib3>=2.6.1",
 ]
 
+[dependency-groups]
+dev = ["pytest>=9.0", "ruff>=0.14.9", "ty>=0.0.1a33"]
+
 [project.scripts]
 kalshi-lp-snapshot = "kalshi_lp.snapshot_cli:main"
 kalshi-lp-analyze = "kalshi_lp.analyze_cli:main"
@@ -21,5 +24,6 @@ kalshi-lp-scale = "kalshi_lp.scale_cli:main"
 [tool.uv]
 package = true
 
-[dependency-groups]
-dev = ["pytest>=9.0"]
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B", "I", "Q", "ASYNC", "COM"]
+ignore = ["COM812"]
