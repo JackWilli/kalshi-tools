@@ -348,10 +348,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "kalshi-python-async", specifier = ">=3.0.0" },
-    { name = "matplotlib", specifier = ">=3.8" },
+    { name = "kalshi-python-async", specifier = ">=3.1.0" },
+    { name = "matplotlib", specifier = ">=3.10" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
-    { name = "urllib3", specifier = ">=2.6.1" },
+    { name = "urllib3", specifier = ">=2.6.2" },
 ]
 
 [package.metadata.requires-dev]
