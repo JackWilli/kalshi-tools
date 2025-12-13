@@ -16,6 +16,7 @@ from typing import Literal
 from .incentive_analyzer import calculate_marginal_lp_score
 from .kalshi_client import fetch_incentive_programs, fetch_orderbook, get_client
 from .lp_math import normalized_side_score_to_rewards
+from .money import Money
 
 
 @dataclass
@@ -33,7 +34,7 @@ class OneSidedAnalysis:
     # Fetched data
     price: int  # best bid in cents
     lp_score: float  # 0-1 (normalized qualifying side score)
-    total_daily_pool: float  # $/day (for entire market, both sides)
+    total_daily_pool: Money  # $/day (for entire market, both sides)
     lp_days: float  # days remaining
 
     # Calculated outputs
@@ -44,8 +45,8 @@ class OneSidedAnalysis:
     expected_loss: float  # $ weighted by probabilities
     variance: float
     std_dev: float
-    lp_if_filled: float  # $ LP rewards if filled halfway
-    lp_if_not_filled: float  # $ LP rewards if never filled
+    lp_if_filled: Money  # LP rewards if filled halfway
+    lp_if_not_filled: Money  # LP rewards if never filled
     expected_return: float  # $ weighted total
     expected_roi: float  # ratio
     annualized_roi: float  # ratio scaled to 365 days
@@ -60,7 +61,7 @@ def calculate_onesided_return(
     size: int,  # contracts
     fill_prob: float,  # 0-1
     lp_score: float,  # 0-1 (normalized qualifying side score)
-    total_daily_pool: float,  # $/day (for entire market, both sides)
+    total_daily_pool: Money,  # $/day (for entire market, both sides)
     lp_days: float,  # days remaining
 ) -> OneSidedAnalysis:
     """
@@ -92,7 +93,8 @@ def calculate_onesided_return(
 
     # Step 5: Combined expected return
     expected_return = (
-        fill_prob * (position_ev + lp_if_filled) + (1 - fill_prob) * lp_if_not_filled
+        fill_prob * (position_ev + lp_if_filled.dollars)
+        + (1 - fill_prob) * lp_if_not_filled.dollars
     )
 
     # Step 6: Risk metrics
@@ -107,8 +109,10 @@ def calculate_onesided_return(
     # Annualized ROI: account for different holding periods
     # If filled: capital locked for 365 days (market resolution)
     # If not filled: capital locked for lp_days (LP program duration)
-    roi_if_filled = (position_ev + lp_if_filled) / capital if capital > 0 else 0.0
-    roi_if_not_filled = lp_if_not_filled / capital if capital > 0 else 0.0
+    roi_if_filled = (
+        (position_ev + lp_if_filled.dollars) / capital if capital > 0 else 0.0
+    )
+    roi_if_not_filled = lp_if_not_filled.dollars / capital if capital > 0 else 0.0
 
     annualized_roi_if_filled = roi_if_filled  # Already 1-year period
     annualized_roi_if_not_filled = (
@@ -169,16 +173,16 @@ def print_analysis(result: OneSidedAnalysis):
         result.lp_score,
         result.total_daily_pool,
     )
-    print(f"  Daily reward:         ${daily_reward:.2f}/day")
+    print(f"  Daily reward:         {daily_reward}/day")
     print(f"  Days remaining:       {result.lp_days:.0f}")
 
     print("\nExpected Returns:")
-    filled_total = result.position_ev + result.lp_if_filled
+    filled_total = result.position_ev + result.lp_if_filled.dollars
     print(
-        f"  If filled (halfway):  ${result.position_ev:+.2f} position + ${result.lp_if_filled:.2f} LP = ${filled_total:+.2f}",
+        f"  If filled (halfway):  ${result.position_ev:+.2f} position + {result.lp_if_filled} LP = ${filled_total:+.2f}",
     )
     print(
-        f"  If never filled:      $0.00 position + ${result.lp_if_not_filled:.2f} LP = ${result.lp_if_not_filled:+.2f}",
+        f"  If never filled:      $0.00 position + {result.lp_if_not_filled} LP = {result.lp_if_not_filled}",
     )
     print(f"  Expected value:       ${result.expected_return:+.2f}")
     print(

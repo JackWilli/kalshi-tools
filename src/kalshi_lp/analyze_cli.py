@@ -5,11 +5,7 @@ from typing import List
 
 from .incentive_analyzer import MarketOpportunity, analyze_market_opportunity
 from .kalshi_client import fetch_incentive_programs, get_client
-
-
-def format_currency(amount: float) -> str:
-    """Format dollar amount."""
-    return f"${amount:.2f}"
+from .money import Money
 
 
 def format_percent(percent: float) -> str:
@@ -26,7 +22,7 @@ def print_opportunity(opp: MarketOpportunity, rank: int):
     if best is None:
         print(f"\n{rank}. {opp.ticker} [NO VIABLE OPPORTUNITY]")
         print(
-            f"   Program Reward: {format_currency(opp.program.period_reward_dollars)} over {opp.program.total_days:.1f} days",
+            f"   Program Reward: {opp.program.period_reward} over {opp.program.total_days:.1f} days",
         )
         print(f"   Days Remaining: {opp.program.days_remaining:.1f}")
         print("   Neither side has sufficient liquidity or positive ROI")
@@ -34,30 +30,26 @@ def print_opportunity(opp: MarketOpportunity, rank: int):
 
     print(f"\n{rank}. {opp.ticker} [{best.side.upper()} SIDE]")
     print(
-        f"   Program Reward: {format_currency(opp.program.period_reward_dollars)} over {opp.program.total_days:.1f} days",
+        f"   Program Reward: {opp.program.period_reward} over {opp.program.total_days:.1f} days",
     )
     print(f"   Days Remaining: {opp.program.days_remaining:.1f}")
-    print(f"   Daily Pool: {format_currency(opp.program.daily_reward_pool)}/day")
-    print(
-        f"   Remaining Rewards: {format_currency(opp.program.remaining_rewards_dollars)}",
-    )
+    print(f"   Daily Pool: {opp.program.daily_reward_pool}/day")
+    print(f"   Remaining Rewards: {opp.program.remaining_rewards}")
     print()
     print(
-        f"   Current Best {best.side.upper()} Price: {format_currency(best.current_best_price / 100.0) if best.current_best_price else 'N/A'}",
+        f"   Current Best {best.side.upper()} Price: {best.current_best_price if best.current_best_price else 'N/A'}",
     )
     print(
-        f"   Optimal Placement: {best.optimal_size} contracts @ {format_currency(best.optimal_price / 100.0) if best.optimal_price else 'N/A'}",
+        f"   Optimal Placement: {best.optimal_size} contracts @ {best.optimal_price if best.optimal_price else 'N/A'}",
     )
-    print(f"   Capital Required: {format_currency(best.capital_required)}")
+    print(f"   Capital Required: {best.capital_required}")
     print()
     print(f"   Expected LP Score: {best.expected_lp_score * 100:.2f}%")
     print(
-        f"   Expected Rewards: {format_currency(best.expected_rewards_total)} total ({format_currency(best.expected_rewards_per_day)}/day)",
+        f"   Expected Rewards: {best.expected_rewards_total} total ({best.expected_rewards_per_day}/day)",
     )
     print(f"   Gross ROI: {format_percent(best.roi_per_day)} per day")
-    print(
-        f"   Adverse Selection: -{format_currency(best.adverse_selection_risk)}/day (est.)",
-    )
+    print(f"   Adverse Selection: -{best.adverse_selection_risk}/day (est.)")
     print(f"   Net ROI: {format_percent(best.net_roi_per_day)} per day")
 
     # Show other side if also viable
@@ -66,10 +58,10 @@ def print_opportunity(opp: MarketOpportunity, rank: int):
         print()
         print(f"   Alternative ({other_side.side.upper()} side):")
         print(
-            f"     {other_side.optimal_size} contracts @ {format_currency(other_side.optimal_price / 100.0) if other_side.optimal_price else 'N/A'}",
+            f"     {other_side.optimal_size} contracts @ {other_side.optimal_price if other_side.optimal_price else 'N/A'}",
         )
         print(
-            f"     Capital: {format_currency(other_side.capital_required)}, Net ROI: {format_percent(other_side.net_roi_per_day)} per day",
+            f"     Capital: {other_side.capital_required}, Net ROI: {format_percent(other_side.net_roi_per_day)} per day",
         )
 
 
@@ -83,30 +75,34 @@ def print_portfolio_summary(opportunities: List[MarketOpportunity], top_n: int):
 
     top_opps = viable_opps[:top_n]
 
-    total_capital = sum(opp.recommended_capital for opp in top_opps)
-    total_daily_rewards = sum(
-        opp.get_best_analysis().expected_rewards_per_day
-        for opp in top_opps
-        if opp.get_best_analysis() is not None
+    total_capital = Money.sum([opp.recommended_capital for opp in top_opps])
+    total_daily_rewards = Money.sum(
+        [
+            opp.get_best_analysis().expected_rewards_per_day
+            for opp in top_opps
+            if opp.get_best_analysis() is not None
+        ]
     )
-    total_adverse_cost = sum(
-        opp.get_best_analysis().adverse_selection_risk
-        for opp in top_opps
-        if opp.get_best_analysis() is not None
+    total_adverse_cost = Money.sum(
+        [
+            opp.get_best_analysis().adverse_selection_risk
+            for opp in top_opps
+            if opp.get_best_analysis() is not None
+        ]
     )
     net_daily_rewards = total_daily_rewards - total_adverse_cost
 
-    avg_net_roi = 0.0
-    if total_capital > 0:
+    avg_net_roi: float = 0.0
+    if total_capital:
         avg_net_roi = (net_daily_rewards / total_capital) * 100
 
     print("\n" + "=" * 80)
     print(f"PORTFOLIO SUMMARY (Top {len(top_opps)} Markets)")
     print("=" * 80)
-    print(f"Total Capital Required: {format_currency(total_capital)}")
-    print(f"Expected Daily Rewards: {format_currency(total_daily_rewards)}")
-    print(f"Estimated Adverse Selection: -{format_currency(total_adverse_cost)}/day")
-    print(f"Net Daily Rewards: {format_currency(net_daily_rewards)}")
+    print(f"Total Capital Required: {total_capital}")
+    print(f"Expected Daily Rewards: {total_daily_rewards}")
+    print(f"Estimated Adverse Selection: -{total_adverse_cost}/day")
+    print(f"Net Daily Rewards: {net_daily_rewards}")
     print(f"Average Net ROI: {format_percent(avg_net_roi)} per day")
     print()
     print(
@@ -179,7 +175,7 @@ async def analyze_incentives(
                 opp = await analyze_market_opportunity(
                     client=client,
                     program=program,
-                    max_capital_per_side=max_capital_per_side,
+                    max_capital_per_side=Money.from_dollars(max_capital_per_side),
                 )
                 opportunities.append(opp)
             except Exception as e:

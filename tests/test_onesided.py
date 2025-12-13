@@ -5,6 +5,7 @@ from math import sqrt
 
 import pytest
 
+from kalshi_lp.money import Money
 from kalshi_lp.onesided_cli import calculate_onesided_return
 
 
@@ -22,7 +23,7 @@ class TestCalculateOnesidedReturn:
             size=100,  # contracts
             fill_prob=0.5,  # probability (0-1)
             lp_score=0.10,  # fraction (0-1) - normalized side score
-            total_daily_pool=10.0,  # $/day (entire market, both sides)
+            total_daily_pool=Money.from_dollars(10.0),  # $/day (entire market, both sides)
             lp_days=100,  # days
         )
 
@@ -37,10 +38,10 @@ class TestCalculateOnesidedReturn:
 
         # LP if filled (halfway) = 0.10 * ($10/2)/day * 50 days = $25
         # (Pool is split 50/50 between YES/NO)
-        assert result.lp_if_filled == pytest.approx(25.0)  # $
+        assert result.lp_if_filled.dollars == pytest.approx(25.0)  # $
 
         # LP if not filled = 0.10 * ($10/2)/day * 100 days = $50
-        assert result.lp_if_not_filled == pytest.approx(50.0)  # $
+        assert result.lp_if_not_filled.dollars == pytest.approx(50.0)  # $
 
         # Expected return = 0.5 * ($4 + $25) + 0.5 * $50 = $14.5 + $25 = $39.5
         assert result.expected_return == pytest.approx(39.5)  # $
@@ -62,7 +63,7 @@ class TestCalculateOnesidedReturn:
             size=100,
             fill_prob=0.0,  # Never filled
             lp_score=0.10,
-            total_daily_pool=10.0,
+            total_daily_pool=Money.from_dollars(10.0),
             lp_days=100,
         )
 
@@ -86,7 +87,7 @@ class TestCalculateOnesidedReturn:
             size=100,
             fill_prob=1.0,  # Always filled
             lp_score=0.10,
-            total_daily_pool=10.0,
+            total_daily_pool=Money.from_dollars(10.0),
             lp_days=100,
         )
 
@@ -107,7 +108,7 @@ class TestCalculateOnesidedReturn:
             size=100,
             fill_prob=0.5,
             lp_score=0.10,
-            total_daily_pool=10.0,
+            total_daily_pool=Money.from_dollars(10.0),
             lp_days=100,
         )
 
@@ -127,7 +128,7 @@ class TestCalculateOnesidedReturn:
             size=100,
             fill_prob=0.5,
             lp_score=0.10,
-            total_daily_pool=10.0,
+            total_daily_pool=Money.from_dollars(10.0),
             lp_days=100,
         )
 
@@ -149,7 +150,7 @@ class TestCalculateOnesidedReturn:
             size=100,
             fill_prob=0.5,
             lp_score=0.10,
-            total_daily_pool=10.0,
+            total_daily_pool=Money.from_dollars(10.0),
             lp_days=100,
         )
 
@@ -172,7 +173,7 @@ class TestCalculateOnesidedReturn:
             size=100,
             fill_prob=0.5,
             lp_score=0.10,
-            total_daily_pool=10.0,
+            total_daily_pool=Money.from_dollars(10.0),
             lp_days=100,
         )
 
@@ -195,7 +196,7 @@ class TestCalculateOnesidedReturn:
             size=100,
             fill_prob=0.5,
             lp_score=0.10,
-            total_daily_pool=10.0,
+            total_daily_pool=Money.from_dollars(10.0),
             lp_days=100,
         )
 
@@ -220,7 +221,7 @@ class TestCalculateOnesidedReturn:
             size=10,
             fill_prob=0.8,
             lp_score=0.05,
-            total_daily_pool=5.0,
+            total_daily_pool=Money.from_dollars(5.0),
             lp_days=30,
         )
 
@@ -244,7 +245,7 @@ class TestCalculateOnesidedReturn:
             size=50,
             fill_prob=0.3,
             lp_score=0.20,
-            total_daily_pool=20.0,
+            total_daily_pool=Money.from_dollars(20.0),
             lp_days=60,
         )
 
@@ -259,10 +260,10 @@ class TestCalculateOnesidedReturn:
         # Verify fetched data fields
         assert result.price == 50
         assert result.lp_score == 0.20
-        assert result.total_daily_pool == 20.0
+        assert result.total_daily_pool == Money.from_dollars(20.0)
         assert result.lp_days == 60
 
-        # Verify all calculated fields exist and are floats
+        # Verify all calculated fields exist and are correct types
         assert isinstance(result.capital, float)
         assert isinstance(result.adjusted_prob, float)
         assert isinstance(result.position_ev, float)
@@ -270,8 +271,8 @@ class TestCalculateOnesidedReturn:
         assert isinstance(result.expected_loss, float)
         assert isinstance(result.variance, float)
         assert isinstance(result.std_dev, float)
-        assert isinstance(result.lp_if_filled, float)
-        assert isinstance(result.lp_if_not_filled, float)
+        assert isinstance(result.lp_if_filled, Money)
+        assert isinstance(result.lp_if_not_filled, Money)
         assert isinstance(result.expected_return, float)
         assert isinstance(result.expected_roi, float)
         assert isinstance(result.annualized_roi, float)

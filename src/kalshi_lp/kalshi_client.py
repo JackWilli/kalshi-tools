@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from kalshi_python_async import Configuration, KalshiClient
 
 from .lp_math import LPOrder, Side
+from .money import Money
 
 load_dotenv()
 
@@ -20,15 +21,10 @@ class IncentiveProgram:
     market_ticker: str
     start_date: datetime
     end_date: datetime
-    period_reward: int  # centi-cents (100 = 1 cent)
+    period_reward: Money  # Total reward pool for the program
     discount_factor: float  # Converted from discount_factor_bps (9000 bps = 0.9)
     target_size: int  # contracts
     days_remaining: float
-
-    @property
-    def period_reward_dollars(self) -> float:
-        """Convert centi-cents to dollars."""
-        return self.period_reward / 10000.0
 
     @property
     def total_days(self) -> float:
@@ -36,16 +32,28 @@ class IncentiveProgram:
         return (self.end_date - self.start_date).total_seconds() / 86400
 
     @property
-    def daily_reward_pool(self) -> float:
-        """Average daily reward pool in dollars (constant throughout program)."""
+    def daily_reward_pool(self) -> Money:
+        """Average daily reward pool (constant throughout program)."""
         if self.total_days <= 0:
-            return 0.0
-        return self.period_reward_dollars / self.total_days
+            return Money.zero()
+        result: Money = self.period_reward / self.total_days
+        return result
+
+    @property
+    def remaining_rewards(self) -> Money:
+        """Total remaining rewards to be earned."""
+        return self.daily_reward_pool * self.days_remaining
+
+    # Backward-compatible properties (DEPRECATED)
+    @property
+    def period_reward_dollars(self) -> float:
+        """DEPRECATED: Use period_reward.dollars instead."""
+        return self.period_reward.dollars
 
     @property
     def remaining_rewards_dollars(self) -> float:
-        """Total remaining rewards to be earned (dollars)."""
-        return self.daily_reward_pool * self.days_remaining
+        """DEPRECATED: Use remaining_rewards.dollars instead."""
+        return self.remaining_rewards.dollars
 
 
 def get_client() -> KalshiClient:
@@ -120,10 +128,10 @@ async def fetch_my_resting_bids(
 
         if o.side == "yes":
             side: Side = "yes"
-            price = o.yes_price
+            price = Money.from_cents(o.yes_price)  # API returns cents
         elif o.side == "no":
             side = "no"
-            price = o.no_price
+            price = Money.from_cents(o.no_price)  # API returns cents
         else:
             continue
 
@@ -222,7 +230,7 @@ async def fetch_incentive_programs(
                         market_ticker=prog.market_ticker,
                         start_date=start_date,
                         end_date=end_date,
-                        period_reward=prog.period_reward,
+                        period_reward=Money.from_centicents(prog.period_reward),  # API returns centicents
                         discount_factor=discount_factor,
                         target_size=target_size,
                         days_remaining=days_remaining,

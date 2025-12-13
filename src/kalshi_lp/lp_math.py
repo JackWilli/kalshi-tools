@@ -1,13 +1,15 @@
 from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Sequence, Tuple
 
+from .money import Money
+
 Side = Literal["yes", "no"]
 
 
 @dataclass
 class LPOrder:
     side: Side
-    price: int  # cents
+    price: Money  # Changed from int
     quantity: int  # resting size
 
 
@@ -47,9 +49,9 @@ def _compute_side_score(
     for o in my_orders:
         if o.quantity <= 0:
             continue
-        if o.price > ref_price or o.price < min_qual_price:
+        if o.price.cents > ref_price or o.price.cents < min_qual_price:
             continue
-        my_score += weight(o.price) * o.quantity
+        my_score += weight(o.price.cents) * o.quantity
 
     if total_score_all == 0:
         return 0.0, ref_price, 0.0, 0.0
@@ -59,24 +61,25 @@ def _compute_side_score(
 
 def normalized_side_score_to_rewards(
     normalized_side_score: float,
-    total_reward_pool: float,
-) -> float:
+    total_reward_pool: Money,
+) -> Money:
     """
-    Convert a normalized qualifying side score to expected dollar rewards.
+    Convert a normalized qualifying side score to expected rewards.
 
     Args:
         normalized_side_score: Your share of one side (YES or NO), between 0-1
         total_reward_pool: Total reward pool for entire market (both sides)
 
     Returns:
-        Expected rewards in dollars
+        Expected rewards as Money
 
     Note:
         The reward pool is split 50/50 between YES and NO sides.
         If you have a normalized qualifying side score of 0.10 (10% of YES side)
         and the total pool is $100, you get 10% of $50 = $5.
     """
-    return normalized_side_score * (total_reward_pool / 2)
+    half_pool: Money = total_reward_pool / 2
+    return half_pool * normalized_side_score
 
 
 def compute_snapshot_lp_score(

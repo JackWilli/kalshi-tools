@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from .incentive_analyzer import calculate_marginal_lp_score
 from .kalshi_client import fetch_incentive_programs, fetch_orderbook, get_client
 from .lp_math import Side
+from .money import Money
 from .onesided_cli import calculate_onesided_return
 
 
@@ -55,7 +56,7 @@ def calculate_scale_analysis(
     your_prob: float,
     haircut: float,
     fill_prob: float,
-    total_daily_pool: float,
+    total_daily_pool: Money,
     lp_days: float,
     side_levels: List[tuple],
     target_size: int,
@@ -155,7 +156,7 @@ def calculate_scale_analysis(
         haircut=haircut,
         fill_prob=fill_prob,
         price=price,
-        total_daily_pool=total_daily_pool,
+        total_daily_pool=total_daily_pool.dollars,
         lp_days=lp_days,
         points=points,
     )

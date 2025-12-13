@@ -11,11 +11,7 @@ from .kalshi_client import (
     get_client,
 )
 from .lp_math import Side
-
-
-def format_currency(amount: float) -> str:
-    """Format dollar amount."""
-    return f"${amount:.2f}"
+from .money import Money
 
 
 def format_percent(percent: float) -> str:
@@ -42,13 +38,13 @@ def print_program_data(program: IncentiveProgram):
     print(f"Days Remaining: {program.days_remaining:.1f} days")
     print()
     print(
-        f"Period Reward: {program.period_reward} centi-cents = {format_currency(program.period_reward_dollars)}",
+        f"Period Reward: {program.period_reward.centicents} centicents = {program.period_reward}",
     )
     print(
-        f"Daily Pool: {format_currency(program.period_reward_dollars)} / {program.total_days:.1f} days = {format_currency(program.daily_reward_pool)}/day",
+        f"Daily Pool: {program.period_reward} / {program.total_days:.1f} days = {program.daily_reward_pool}/day",
     )
     print(
-        f"Remaining Rewards: {format_currency(program.daily_reward_pool)}/day × {program.days_remaining:.1f} days = {format_currency(program.remaining_rewards_dollars)}",
+        f"Remaining Rewards: {program.daily_reward_pool}/day × {program.days_remaining:.1f} days = {program.remaining_rewards}",
     )
     print()
     print(f"Target Size: {program.target_size} contracts")
@@ -66,7 +62,7 @@ def print_orderbook_data(
     print(f"  {'Price':<10} {'Quantity':<12} {'(Price × Qty)'}")
     total_yes = 0
     for price, qty in sorted(yes_levels, key=lambda x: x[0], reverse=True):
-        print(f"  {format_currency(price / 100.0):<10} {qty:<12} {price * qty // 100}")
+        print(f"  {str(Money.from_cents(price)):<10} {qty:<12} {price * qty // 100}")
         total_yes += qty
     print(f"  Total: {total_yes} contracts")
     print()
@@ -75,7 +71,7 @@ def print_orderbook_data(
     print(f"  {'Price':<10} {'Quantity':<12} {'(Price × Qty)'}")
     total_no = 0
     for price, qty in sorted(no_levels, key=lambda x: x[0], reverse=True):
-        print(f"  {format_currency(price / 100.0):<10} {qty:<12} {price * qty // 100}")
+        print(f"  {str(Money.from_cents(price)):<10} {qty:<12} {price * qty // 100}")
         total_no += qty
     print(f"  Total: {total_no} contracts")
 
@@ -117,7 +113,7 @@ def calculate_side_with_details(
         qualifying.append((price, qty))
         total_size += qty
         print(
-            f"  - {format_currency(price / 100.0)} × {qty} = {total_size} contracts (cumulative)",
+            f"  - {Money.from_cents(price)} × {qty} = {total_size} contracts (cumulative)",
         )
 
     if total_size < program.target_size:
@@ -141,7 +137,7 @@ def calculate_side_with_details(
     ref_price = qualifying[0][0]
     print("Step 2: Calculate Reference Price")
     print(
-        f"  ref_price = best qualifying price = {format_currency(ref_price / 100.0)} ({ref_price} cents)",
+        f"  ref_price = best qualifying price = {Money.from_cents(ref_price)} ({ref_price} cents)",
     )
     print()
 
@@ -165,7 +161,7 @@ def calculate_side_with_details(
         ws = w * qty
         total_weighted_score_before += ws
         print(
-            f"    {format_currency(price / 100.0):<8} {qty:<6} {ticks_away:<12} {program.discount_factor}^{ticks_away} = {w:.4f}  {w:.4f} × {qty} = {ws:.2f}",
+            f"    {str(Money.from_cents(price)):<8} {qty:<6} {ticks_away:<12} {program.discount_factor}^{ticks_away} = {w:.4f}  {w:.4f} × {qty} = {ws:.2f}",
         )
 
     print(f"    {'─' * 70}")
@@ -235,7 +231,7 @@ def calculate_side_with_details(
         }
 
     print(
-        f"  Optimal Order: {best_placement['size']} contracts @ {format_currency(best_placement['price'] / 100.0)}",
+        f"  Optimal Order: {best_placement['size']} contracts @ {Money.from_cents(int(best_placement['price']))}",
     )
     print()
 
@@ -248,9 +244,9 @@ def calculate_side_with_details(
     )
 
     # Show orderbook with our order added
+    our_price = int(best_placement["price"])
+    our_size = int(best_placement["size"])
     orderbook_with_ours = qualifying.copy()
-    our_price = best_placement["price"]
-    our_size = best_placement["size"]
 
     # Add our order to the orderbook
     found = False
@@ -269,7 +265,7 @@ def calculate_side_with_details(
         ws = w * qty
         marker = "*" if price == our_price else " "
         print(
-            f"    {format_currency(price / 100.0):<8} {qty:<6}{marker} {ticks_away:<12} {program.discount_factor}^{ticks_away} = {w:.4f}  {w:.4f} × {qty} = {ws:.2f}",
+            f"    {str(Money.from_cents(price)):<8} {qty:<6}{marker} {ticks_away:<12} {program.discount_factor}^{ticks_away} = {w:.4f}  {w:.4f} × {qty} = {ws:.2f}",
         )
 
     print(f"    {'─' * 70}")
@@ -289,35 +285,34 @@ def calculate_side_with_details(
 
     # Step 7: Expected Rewards
     print("Step 7: Calculate Expected Rewards")
-    expected_rewards_total = (
-        best_placement["lp_score"] * program.remaining_rewards_dollars
-    )
-    expected_rewards_per_day = expected_rewards_total / max(program.days_remaining, 1)
+    expected_rewards_total: Money = program.remaining_rewards * best_placement["lp_score"]
+    expected_rewards_per_day: Money = expected_rewards_total / max(program.days_remaining, 1)
     print("  Expected Rewards (total) = LP Score × Remaining Rewards")
     print(
-        f"  Expected Rewards (total) = {best_placement['lp_score']:.4f} × {format_currency(program.remaining_rewards_dollars)} = {format_currency(expected_rewards_total)}",
+        f"  Expected Rewards (total) = {best_placement['lp_score']:.4f} × {program.remaining_rewards} = {expected_rewards_total}",
     )
     print(
-        f"  Expected Rewards (per day) = {format_currency(expected_rewards_total)} / {program.days_remaining:.1f} days = {format_currency(expected_rewards_per_day)}/day",
+        f"  Expected Rewards (per day) = {expected_rewards_total} / {program.days_remaining:.1f} days = {expected_rewards_per_day}/day",
     )
     print()
 
     # Step 8: Capital Required
     print("Step 8: Calculate Capital Required")
+    capital = Money.from_cents(int(best_placement['price'])) * int(best_placement['size'])
     print(
-        f"  Capital = Price × Size = {format_currency(best_placement['price'] / 100.0)} × {best_placement['size']} = {format_currency(best_placement['capital'])}",
+        f"  Capital = Price × Size = {Money.from_cents(int(best_placement['price']))} × {best_placement['size']} = {capital}",
     )
     print()
 
     # Step 9: ROI
     print("Step 9: Calculate ROI")
     roi_per_day = (
-        (expected_rewards_per_day / best_placement["capital"]) * 100
-        if best_placement["capital"] > 0
+        (expected_rewards_per_day / capital) * 100
+        if capital
         else 0.0
     )
     print(
-        f"  Gross ROI/day = ({format_currency(expected_rewards_per_day)} / {format_currency(best_placement['capital'])}) × 100% = {format_percent(roi_per_day)} per day",
+        f"  Gross ROI/day = ({expected_rewards_per_day} / {capital}) × 100% = {format_percent(roi_per_day)} per day",
     )
     print()
 
@@ -326,37 +321,37 @@ def calculate_side_with_details(
     fill_rate = 0.10
     adverse_ticks = 2
     expected_fills = our_size * fill_rate
-    cost_per_fill = adverse_ticks / 100.0
-    adverse_cost_per_day = expected_fills * cost_per_fill
+    cost_per_fill = Money.from_cents(adverse_ticks)
+    adverse_cost_per_day: Money = cost_per_fill * expected_fills
     print(f"  Fill Rate: {fill_rate * 100:.0f}%, Adverse Ticks: {adverse_ticks} cents")
     print(
         f"  Expected Fills/day = {our_size} × {fill_rate} = {expected_fills:.1f} fills",
     )
-    print(f"  Cost per fill = {format_currency(cost_per_fill)}")
+    print(f"  Cost per fill = {cost_per_fill}")
     print(
-        f"  Adverse Selection Cost = {expected_fills:.1f} × {format_currency(cost_per_fill)} = {format_currency(adverse_cost_per_day)}/day",
+        f"  Adverse Selection Cost = {expected_fills:.1f} × {cost_per_fill} = {adverse_cost_per_day}/day",
     )
     print()
 
     # Step 11: Net ROI
     print("Step 11: Net ROI")
-    net_rewards_per_day = expected_rewards_per_day - adverse_cost_per_day
-    net_roi_per_day = (
-        (net_rewards_per_day / best_placement["capital"]) * 100
-        if best_placement["capital"] > 0
+    net_rewards_per_day: Money = expected_rewards_per_day - adverse_cost_per_day
+    net_roi_per_day: float = (
+        (net_rewards_per_day / capital) * 100
+        if capital
         else 0.0
     )
     print(
-        f"  Net Rewards/day = {format_currency(expected_rewards_per_day)} - {format_currency(adverse_cost_per_day)} = {format_currency(net_rewards_per_day)}/day",
+        f"  Net Rewards/day = {expected_rewards_per_day} - {adverse_cost_per_day} = {net_rewards_per_day}/day",
     )
     print(
-        f"  Net ROI/day = ({format_currency(net_rewards_per_day)} / {format_currency(best_placement['capital'])}) × 100% = {format_percent(net_roi_per_day)} per day",
+        f"  Net ROI/day = ({net_rewards_per_day} / {capital}) × 100% = {format_percent(net_roi_per_day)} per day",
     )
 
     return {
         "lp_score": best_placement["lp_score"],
-        "capital": best_placement["capital"],
-        "rewards_per_day": expected_rewards_per_day,
+        "capital": capital.dollars,  # Return as float for compatibility
+        "rewards_per_day": expected_rewards_per_day.dollars,
         "roi_per_day": roi_per_day,
         "net_roi_per_day": net_roi_per_day,
         "price": best_placement["price"],
@@ -428,23 +423,23 @@ async def debug_market_analysis(ticker: str, max_capital: float = 5000.0):
         # Run analyzer for comparison
         print_section("5. ANALYZER COMPARISON", "-")
         print("Running full analyzer for comparison...")
-        analyzer_result = await analyze_market_opportunity(client, program, max_capital)
+        analyzer_result = await analyze_market_opportunity(client, program, Money.from_dollars(max_capital))
 
         print()
         print("Manual Calculation Results:")
         print(
-            f"  YES: LP Score={yes_result['lp_score'] * 100:.2f}%, Net ROI={format_percent(yes_result['net_roi_per_day'])}/day, Capital={format_currency(yes_result['capital'])}",
+            f"  YES: LP Score={yes_result['lp_score'] * 100:.2f}%, Net ROI={format_percent(yes_result['net_roi_per_day'])}/day, Capital={Money.from_dollars(yes_result['capital'])}",
         )
         print(
-            f"  NO:  LP Score={no_result['lp_score'] * 100:.2f}%, Net ROI={format_percent(no_result['net_roi_per_day'])}/day, Capital={format_currency(no_result['capital'])}",
+            f"  NO:  LP Score={no_result['lp_score'] * 100:.2f}%, Net ROI={format_percent(no_result['net_roi_per_day'])}/day, Capital={Money.from_dollars(no_result['capital'])}",
         )
         print()
         print("Analyzer Results:")
         print(
-            f"  YES: LP Score={analyzer_result.yes_side.expected_lp_score * 100:.2f}%, Net ROI={format_percent(analyzer_result.yes_side.net_roi_per_day)}/day, Capital={format_currency(analyzer_result.yes_side.capital_required)}",
+            f"  YES: LP Score={analyzer_result.yes_side.expected_lp_score * 100:.2f}%, Net ROI={format_percent(analyzer_result.yes_side.net_roi_per_day)}/day, Capital={analyzer_result.yes_side.capital_required}",
         )
         print(
-            f"  NO:  LP Score={analyzer_result.no_side.expected_lp_score * 100:.2f}%, Net ROI={format_percent(analyzer_result.no_side.net_roi_per_day)}/day, Capital={format_currency(analyzer_result.no_side.capital_required)}",
+            f"  NO:  LP Score={analyzer_result.no_side.expected_lp_score * 100:.2f}%, Net ROI={format_percent(analyzer_result.no_side.net_roi_per_day)}/day, Capital={analyzer_result.no_side.capital_required}",
         )
         print()
         print(

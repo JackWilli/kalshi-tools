@@ -11,6 +11,7 @@ from .lp_math import (
     _compute_side_score,
     normalized_side_score_to_rewards,
 )
+from .money import Money
 
 
 @dataclass
@@ -18,15 +19,15 @@ class SideAnalysis:
     """Analysis for one side of a market (YES or NO)."""
 
     side: Side
-    current_best_price: Optional[int]  # cents (None if no liquidity)
-    optimal_price: Optional[int]  # cents (where to place order)
+    current_best_price: Optional[Money]  # None if no liquidity
+    optimal_price: Optional[Money]  # where to place order
     optimal_size: int  # contracts
     expected_lp_score: float  # 0-1, your share of rewards
-    expected_rewards_total: float  # dollars (total over remaining period)
-    expected_rewards_per_day: float  # dollars/day
-    capital_required: float  # dollars
+    expected_rewards_total: Money  # total over remaining period
+    expected_rewards_per_day: Money  # per day
+    capital_required: Money  # required capital
     roi_per_day: float  # % per day = rewards / capital
-    adverse_selection_risk: float  # estimated loss from fills ($/day)
+    adverse_selection_risk: Money  # estimated loss from fills (per day)
     net_roi_per_day: float  # after adverse selection (% per day)
 
     def is_viable(self) -> bool:
@@ -34,7 +35,7 @@ class SideAnalysis:
         return (
             self.optimal_price is not None
             and self.optimal_size > 0
-            and self.capital_required > 0
+            and bool(self.capital_required)  # Money.__bool__ checks if non-zero
             and self.net_roi_per_day > 0
         )
 
@@ -48,7 +49,7 @@ class MarketOpportunity:
     yes_side: SideAnalysis
     no_side: SideAnalysis
     best_side: Optional[Side]  # Which side has higher net ROI
-    recommended_capital: float  # Based on reward/risk
+    recommended_capital: Money  # Based on reward/risk
 
     def get_best_analysis(self) -> Optional[SideAnalysis]:
         """Get the analysis for the best side."""
@@ -60,33 +61,33 @@ class MarketOpportunity:
 
 
 def estimate_adverse_selection(
-    price: int,
+    price: Money,
     size: int,
     side: Side,
     fill_rate: float = 0.10,
     adverse_ticks: int = 2,
-) -> float:
+) -> Money:
     """
-    Estimate adverse selection cost in $/day.
+    Estimate adverse selection cost per day.
 
     Args:
-        price: Order price in cents
+        price: Order price as Money
         size: Order size in contracts
         side: "yes" or "no"
         fill_rate: Expected fraction of orders that fill (default 10%)
         adverse_ticks: Expected adverse price movement in cents (default 2)
 
     Returns:
-        Expected adverse selection cost in dollars per day
+        Expected adverse selection cost per day as Money
     """
     # Expected fills per day
     expected_fills = size * fill_rate
 
-    # Cost per adverse fill (in dollars)
-    cost_per_fill = adverse_ticks / 100.0
+    # Cost per adverse fill
+    cost_per_fill = Money.from_cents(adverse_ticks)
 
     # Total adverse cost per day
-    return expected_fills * cost_per_fill
+    return cost_per_fill * expected_fills
 
 
 def calculate_marginal_lp_score(
@@ -115,7 +116,7 @@ def calculate_marginal_lp_score(
     """
     # Add our new simulated order to existing orders
     simulated_orders = list(my_existing_orders)
-    simulated_orders.append(LPOrder(side=side, price=new_price, quantity=new_size))
+    simulated_orders.append(LPOrder(side=side, price=Money.from_cents(new_price), quantity=new_size))
 
     # Add the new order to the orderbook as well (so denominator is correct)
     updated_levels = list(side_levels)
@@ -145,19 +146,19 @@ def optimize_side_placement(
     my_existing_orders: List[LPOrder],
     target_size: int,
     discount_factor: float,
-    max_capital: float,
+    max_capital: Money,
     side: Side,
     is_buy: bool = True,
-) -> Tuple[Optional[int], int, float]:
+) -> Tuple[Optional[Money], int, float]:
     """
     Find optimal (price, size) to maximize LP score per dollar deployed.
 
     Args:
-        side_levels: Current orderbook levels [(price, qty)], best first
+        side_levels: Current orderbook levels [(price_cents, qty)], best first
         my_existing_orders: Our existing orders on this side
         target_size: Program target size
         discount_factor: Program discount factor
-        max_capital: Maximum capital to deploy (dollars)
+        max_capital: Maximum capital to deploy
         side: "yes" or "no"
         is_buy: Whether we're buying (True) or selling (False)
 
@@ -169,22 +170,24 @@ def optimize_side_placement(
 
     # Sort levels by price (highest first for better comparison)
     sorted_levels = sorted(side_levels, key=lambda x: x[0], reverse=True)
-    best_price = sorted_levels[0][0]
+    best_price_cents = sorted_levels[0][0]
 
     # Try different price levels (best bid, best-1, best-2, etc.)
-    best_placement: Optional[Tuple[int, int, float, float]] = (
+    best_placement: Optional[Tuple[Money, int, float, float]] = (
         None  # (price, size, score, score_per_dollar)
     )
 
-    for price_offset in range(0, min(10, best_price)):  # Try up to 10 ticks away
-        price = best_price - price_offset
+    for price_offset in range(0, min(10, best_price_cents)):  # Try up to 10 ticks away
+        price_cents = best_price_cents - price_offset
 
-        if price <= 0:
+        if price_cents <= 0:
             break
 
+        price = Money.from_cents(price_cents)
+
         # Calculate affordable size at this price
-        capital_per_contract = price / 100.0  # cents to dollars
-        max_affordable_size = int(max_capital / capital_per_contract)
+        capital_per_contract = price  # Money
+        max_affordable_size = int(max_capital.centicents / capital_per_contract.centicents)
 
         if max_affordable_size <= 0:
             continue
@@ -195,16 +198,16 @@ def optimize_side_placement(
                 continue
 
             # Calculate capital required
-            capital_required = (price * size) / 100.0
+            capital_required = price * size
 
-            if capital_required <= 0 or capital_required > max_capital:
+            if not capital_required or capital_required > max_capital:
                 continue
 
             # Calculate LP score with this placement
             lp_score = calculate_marginal_lp_score(
                 side_levels=sorted_levels,
                 my_existing_orders=my_existing_orders,
-                new_price=price,
+                new_price=price_cents,
                 new_size=size,
                 target_size=target_size,
                 discount_factor=discount_factor,
@@ -215,7 +218,7 @@ def optimize_side_placement(
                 continue
 
             # Calculate score per dollar (efficiency metric)
-            score_per_dollar = lp_score / capital_required
+            score_per_dollar = lp_score / capital_required.dollars
 
             # Track best placement
             if best_placement is None or score_per_dollar > best_placement[3]:
@@ -233,7 +236,7 @@ async def analyze_side(
     side: Side,
     side_levels: List[Tuple[int, int]],
     my_existing_orders: List[LPOrder],
-    max_capital: float = 1000.0,
+    max_capital: Money,
 ) -> SideAnalysis:
     """
     Analyze one side of a market.
@@ -252,7 +255,7 @@ async def analyze_side(
     # Get current best price
     current_best_price = None
     if side_levels:
-        current_best_price = max(p for p, q in side_levels)
+        current_best_price = Money.from_cents(max(p for p, q in side_levels))
 
     # Find optimal placement
     optimal_price, optimal_size, expected_lp_score = optimize_side_placement(
@@ -266,22 +269,22 @@ async def analyze_side(
     )
 
     # Calculate metrics
-    capital_required = 0.0
-    expected_rewards_total = 0.0
-    expected_rewards_per_day = 0.0
-    roi_per_day = 0.0
-    adverse_selection_risk = 0.0
-    net_roi_per_day = 0.0
+    capital_required: Money = Money.zero()
+    expected_rewards_total: Money = Money.zero()
+    expected_rewards_per_day: Money = Money.zero()
+    roi_per_day: float = 0.0
+    adverse_selection_risk: Money = Money.zero()
+    net_roi_per_day: float = 0.0
 
     if optimal_price is not None and optimal_size > 0:
         # Capital required
-        capital_required = (optimal_price * optimal_size) / 100.0
+        capital_required = optimal_price * optimal_size
 
         # Expected rewards (your share of total remaining rewards)
         # Note: expected_lp_score is a normalized qualifying side score
         expected_rewards_total = normalized_side_score_to_rewards(
             expected_lp_score,
-            program.remaining_rewards_dollars,
+            program.remaining_rewards,
         )
         expected_rewards_per_day = expected_rewards_total / max(
             program.days_remaining,
@@ -289,7 +292,7 @@ async def analyze_side(
         )
 
         # ROI per day (%)
-        if capital_required > 0:
+        if capital_required:
             roi_per_day = (expected_rewards_per_day / capital_required) * 100
 
         # Adverse selection estimate
@@ -301,7 +304,7 @@ async def analyze_side(
 
         # Net ROI per day (after adverse selection)
         net_rewards_per_day = expected_rewards_per_day - adverse_selection_risk
-        if capital_required > 0:
+        if capital_required:
             net_roi_per_day = (net_rewards_per_day / capital_required) * 100
 
     return SideAnalysis(
@@ -322,7 +325,7 @@ async def analyze_side(
 async def analyze_market_opportunity(
     client: KalshiClient,
     program: IncentiveProgram,
-    max_capital_per_side: float = 1000.0,
+    max_capital_per_side: Money,
 ) -> MarketOpportunity:
     """
     Analyze a market's liquidity incentive opportunity.
@@ -377,7 +380,7 @@ async def analyze_market_opportunity(
         best_side = "no"
 
     # Recommended capital (for best side)
-    recommended_capital = 0.0
+    recommended_capital = Money.zero()
     if best_side == "yes":
         recommended_capital = yes_analysis.capital_required
     elif best_side == "no":
