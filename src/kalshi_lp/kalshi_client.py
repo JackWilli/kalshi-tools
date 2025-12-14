@@ -93,13 +93,6 @@ async def fetch_orderbook(
 ) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
     ob_resp = await client.get_market_orderbook(ticker=ticker)
 
-    # Debug: Print raw data to verify what the API actually returns
-    # print("\nDEBUG - Raw orderbook data:")
-    # print(f"  yes_dollars type: {type(ob_resp.orderbook.yes_dollars)}")
-    # print(f"  yes_dollars content: {ob_resp.orderbook.yes_dollars[:3] if len(ob_resp.orderbook.yes_dollars) > 0 else '[]'}")
-    # if len(ob_resp.orderbook.yes_dollars) > 0:
-    #     print(f"  First yes entry types: [{type(ob_resp.orderbook.yes_dollars[0][0])}, {type(ob_resp.orderbook.yes_dollars[0][1])}]")
-
     # Convert price from dollars (string) to cents (int), quantity is already int
     # Price comes as string like '0.0100' representing $0.01 (1 cent)
     yes_levels = [
@@ -249,3 +242,43 @@ async def fetch_incentive_programs(
             break
 
     return programs
+
+
+async def get_incentive_program_for_ticker(
+    client: KalshiClient,
+    ticker: str,
+    status: str = "active",
+    incentive_type: str = "liquidity",
+) -> IncentiveProgram:
+    """
+    Fetch incentive program for a specific ticker.
+
+    This is a convenience function that wraps fetch_incentive_programs() and
+    finds the incentive program for a specific market ticker. Eliminates duplicate
+    program-fetching patterns across CLI modules.
+
+    Args:
+        client: Authenticated Kalshi client
+        ticker: Market ticker (e.g., "PRES-2024")
+        status: Incentive program status filter (default: "active")
+        incentive_type: Type of incentive (default: "liquidity")
+
+    Returns:
+        IncentiveProgram for the specified ticker
+
+    Raises:
+        ValueError: If no matching incentive program is found
+    """
+    programs = await fetch_incentive_programs(
+        client, status=status, incentive_type=incentive_type
+    )
+    incentive_program = next(
+        (p for p in programs if p.market_ticker == ticker), None
+    )
+
+    if incentive_program is None:
+        raise ValueError(
+            f"No {status} {incentive_type} incentive program found for ticker: {ticker}"
+        )
+
+    return incentive_program

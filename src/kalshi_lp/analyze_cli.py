@@ -1,18 +1,10 @@
 # src/kalshi_lp/analyze_cli.py
-import asyncio
-import sys
 from typing import List
 
+from .cli_utils import format_percent, print_section
 from .incentive_analyzer import MarketOpportunity, analyze_market_opportunity
 from .kalshi_client import fetch_incentive_programs, get_client
 from .money import Money
-
-
-def format_percent(percent: float) -> str:
-    """Format percentage."""
-    if percent >= 0:
-        return f"+{percent:.2f}%"
-    return f"{percent:.2f}%"
 
 
 def print_opportunity(opp: MarketOpportunity, rank: int):
@@ -96,9 +88,7 @@ def print_portfolio_summary(opportunities: List[MarketOpportunity], top_n: int):
     if total_capital:
         avg_net_roi = (net_daily_rewards / total_capital) * 100
 
-    print("\n" + "=" * 80)
-    print(f"PORTFOLIO SUMMARY (Top {len(top_opps)} Markets)")
-    print("=" * 80)
+    print_section(f"PORTFOLIO SUMMARY (Top {len(top_opps)} Markets)")
     print(f"Total Capital Required: {total_capital}")
     print(f"Expected Daily Rewards: {total_daily_rewards}")
     print(f"Estimated Adverse Selection: -{total_adverse_cost}/day")
@@ -126,9 +116,7 @@ async def analyze_incentives(
         top_n: Number of top opportunities to show in summary
         show_all: Show all opportunities, even non-viable ones
     """
-    print("KALSHI LIQUIDITY INCENTIVE ANALYSIS")
-    print("=" * 80)
-    print()
+    print_section("KALSHI LIQUIDITY INCENTIVE ANALYSIS")
 
     # Get client
     try:
@@ -204,8 +192,9 @@ async def analyze_incentives(
         )
 
         # Display results
-        print(f"Top Opportunities (ranked by Net ROI/day, min ROI: {min_roi:.1f}%):")
-        print("=" * 80)
+        print_section(
+            f"Top Opportunities (ranked by Net ROI/day, min ROI: {min_roi:.1f}%)"
+        )
 
         display_count = min(top_n, len(filtered_opps))
         for i, opp in enumerate(filtered_opps[:display_count], 1):
@@ -221,55 +210,5 @@ async def analyze_incentives(
         await client.close()
 
 
-def main():
-    """CLI entry point."""
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Analyze Kalshi liquidity incentive opportunities",
-    )
-    parser.add_argument(
-        "--min-roi",
-        type=float,
-        default=0.0,
-        help="Minimum net ROI per day to display (%%, default: 0.0)",
-    )
-    parser.add_argument(
-        "--max-capital",
-        type=float,
-        default=1000.0,
-        help="Maximum capital to simulate per side (default: $1000)",
-    )
-    parser.add_argument(
-        "--top-n",
-        type=int,
-        default=20,
-        help="Number of top opportunities to display (default: 20)",
-    )
-    parser.add_argument(
-        "--show-all",
-        action="store_true",
-        help="Show all markets including non-viable ones",
-    )
-
-    args = parser.parse_args()
-
-    try:
-        asyncio.run(
-            analyze_incentives(
-                min_roi=args.min_roi,
-                max_capital_per_side=args.max_capital,
-                top_n=args.top_n,
-                show_all=args.show_all,
-            ),
-        )
-    except KeyboardInterrupt:
-        print("\nAnalysis interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\nUnexpected error: {e}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
+# main() function removed - now using unified CLI in cli.py
+# Use: kalshi-lp analyze [--min-roi PERCENT] [--max-capital AMOUNT] [--top-n N] [--show-all]

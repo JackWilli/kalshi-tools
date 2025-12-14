@@ -6,17 +6,19 @@ Evaluates expected returns and risk for placing limit orders on positions
 you'd hold anyway, combining directional position EV with LP rewards.
 """
 
-import argparse
-import asyncio
-import sys
 from dataclasses import dataclass
 from math import sqrt
 from typing import Literal
 
 from .incentive_analyzer import calculate_marginal_lp_score
-from .kalshi_client import fetch_incentive_programs, fetch_orderbook, get_client
+from .kalshi_client import (
+    fetch_orderbook,
+    get_client,
+    get_incentive_program_for_ticker,
+)
 from .lp_math import normalized_side_score_to_rewards
 from .money import Money
+from .orderbook_utils import get_best_bid, sort_orderbook_levels
 
 
 @dataclass
@@ -215,15 +217,9 @@ async def run_analysis(
     client = get_client()
     try:
         # 1. Find LP program for this ticker
-        programs = await fetch_incentive_programs(
-            client,
-            status="active",
-            incentive_type="liquidity",
+        program = await get_incentive_program_for_ticker(
+            client, ticker, status="active", incentive_type="liquidity"
         )
-        program = next((p for p in programs if p.market_ticker == ticker), None)
-
-        if program is None:
-            raise ValueError(f"No active LP program found for ticker: {ticker}")
 
         # 2. Fetch orderbook
         yes_levels, no_levels = await fetch_orderbook(client, ticker)
@@ -233,10 +229,10 @@ async def run_analysis(
             raise ValueError(f"No liquidity on {side} side for {ticker}")
 
         # 3. Get best bid price
-        price = max(p for p, _ in levels)
+        price = get_best_bid(levels)
 
         # 4. Calculate LP score using existing function
-        sorted_levels = sorted(levels, key=lambda x: x[0], reverse=True)
+        sorted_levels = sort_orderbook_levels(levels)
         lp_score = calculate_marginal_lp_score(
             side_levels=sorted_levels,
             my_existing_orders=[],
@@ -264,78 +260,5 @@ async def run_analysis(
         await client.close()
 
 
-def main():
-    """CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="Analyze one-sided market making returns combining position EV with LP rewards",
-    )
-
-    # Required positional arguments
-    parser.add_argument("ticker", help="Market ticker (e.g., PRES-2024-DEM)")
-    parser.add_argument(
-        "side",
-        choices=["yes", "no"],
-        help="Which side to buy (yes or no)",
-    )
-    parser.add_argument(
-        "your_prob",
-        type=float,
-        help="Your probability belief (0-1, e.g., 0.95 for 95%%)",
-    )
-    parser.add_argument("size", type=int, help="Position size in contracts")
-
-    # Optional arguments with defaults
-    parser.add_argument(
-        "--haircut",
-        type=float,
-        default=0.01,
-        help="Probability reduction if filled for adverse selection (default: 0.01 = 1%%)",
-    )
-    parser.add_argument(
-        "--fill-prob",
-        type=float,
-        default=0.5,
-        help="Estimated probability of getting filled (default: 0.5 = 50%%)",
-    )
-
-    args = parser.parse_args()
-
-    # Validate inputs
-    if not 0 < args.your_prob <= 1:
-        print("Error: your_prob must be between 0 and 1")
-        sys.exit(1)
-    if not 0 <= args.haircut < 1:
-        print("Error: haircut must be between 0 and 1")
-        sys.exit(1)
-    if not 0 < args.fill_prob <= 1:
-        print("Error: fill_prob must be between 0 and 1")
-        sys.exit(1)
-    if args.size <= 0:
-        print("Error: size must be positive")
-        sys.exit(1)
-
-    try:
-        result = asyncio.run(
-            run_analysis(
-                ticker=args.ticker,
-                side=args.side,
-                your_prob=args.your_prob,
-                size=args.size,
-                haircut=args.haircut,
-                fill_prob=args.fill_prob,
-            ),
-        )
-        print_analysis(result)
-    except KeyboardInterrupt:
-        print("\nAnalysis interrupted by user")
-        sys.exit(1)
-    except ValueError as e:
-        print(f"\nError: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\nUnexpected error: {e}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
+# main() function removed - now using unified CLI in cli.py
+# Use: kalshi-lp onesided TICKER SIDE YOUR_PROB SIZE [--haircut H] [--fill-prob P]

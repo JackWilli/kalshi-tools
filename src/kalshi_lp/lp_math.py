@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Sequence, Tuple
 
 from .money import Money
+from .orderbook_utils import calculate_exponential_weight, sort_orderbook_levels
 
 Side = Literal["yes", "no"]
 
@@ -22,7 +23,7 @@ def _compute_side_score(
     if not side_levels:
         return 0.0, None, 0.0, 0.0
 
-    sorted_levels = sorted(side_levels, key=lambda x: x[0], reverse=True)
+    sorted_levels = sort_orderbook_levels(list(side_levels))
 
     qualifying: List[Tuple[int, int]] = []
     total_size = 0
@@ -39,11 +40,10 @@ def _compute_side_score(
     ref_price = qualifying[0][0]
     min_qual_price = qualifying[-1][0]
 
-    def weight(p: int) -> float:
-        ticks = ref_price - p
-        return discount_factor ** max(ticks, 0)
-
-    total_score_all = sum(weight(p) * q for p, q in qualifying)
+    total_score_all = sum(
+        calculate_exponential_weight(p, ref_price, discount_factor) * q
+        for p, q in qualifying
+    )
 
     my_score = 0.0
     for o in my_orders:
@@ -51,7 +51,10 @@ def _compute_side_score(
             continue
         if o.price.cents > ref_price or o.price.cents < min_qual_price:
             continue
-        my_score += weight(o.price.cents) * o.quantity
+        my_score += (
+            calculate_exponential_weight(o.price.cents, ref_price, discount_factor)
+            * o.quantity
+        )
 
     if total_score_all == 0:
         return 0.0, ref_price, 0.0, 0.0

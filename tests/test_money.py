@@ -1,6 +1,7 @@
 """Tests for Money type."""
 
 import pytest
+
 from kalshi_lp.money import Money
 
 

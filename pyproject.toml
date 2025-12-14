@@ -6,24 +6,20 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "kalshi-python-async>=3.1.0",
-    "matplotlib>=3.10",
+    "matplotlib>=3.10.8",
     "python-dotenv>=1.2.1",
     "urllib3>=2.6.2",
 ]
 
 [dependency-groups]
-dev = ["pytest>=9.0", "ruff>=0.14.9", "ty>=0.0.1a33"]
+dev = ["pytest>=9.0.2", "ruff>=0.14.9", "ty>=0.0.1a34"]
 
 [project.scripts]
-kalshi-lp-snapshot = "kalshi_lp.snapshot_cli:main"
-kalshi-lp-analyze = "kalshi_lp.analyze_cli:main"
-kalshi-lp-debug = "kalshi_lp.debug_cli:main"
-kalshi-lp-onesided = "kalshi_lp.onesided_cli:main"
-kalshi-lp-scale = "kalshi_lp.scale_cli:main"
+kalshi-lp = "kalshi_lp.cli:main"
 
 [tool.uv]
 package = true
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "B", "I", "Q", "ASYNC", "COM"]
+select = ["E4", "E7", "E9", "F", "B", "I", "Q", "ASYNC", "COM", "RUF"]
 ignore = ["COM812"]

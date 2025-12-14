@@ -6,19 +6,21 @@ Analyzes how ROI changes as position size increases, showing diminishing
 returns from LP score dilution.
 """
 
-import argparse
-import asyncio
-import sys
 from dataclasses import dataclass
 from typing import List
 
 import matplotlib.pyplot as plt
 
 from .incentive_analyzer import calculate_marginal_lp_score
-from .kalshi_client import fetch_incentive_programs, fetch_orderbook, get_client
+from .kalshi_client import (
+    fetch_orderbook,
+    get_client,
+    get_incentive_program_for_ticker,
+)
 from .lp_math import Side
 from .money import Money
 from .onesided_cli import calculate_onesided_return
+from .orderbook_utils import get_best_bid, sort_orderbook_levels
 
 
 @dataclass
@@ -95,7 +97,7 @@ def calculate_scale_analysis(
     if max_size not in sizes:
         sizes.append(max_size)
 
-    sorted_levels = sorted(side_levels, key=lambda x: x[0], reverse=True)
+    sorted_levels = sort_orderbook_levels(side_levels)
 
     points: List[ScalePoint] = []
     prev_return = 0.0
@@ -266,15 +268,9 @@ async def run_scale_analysis(
     client = get_client()
     try:
         # 1. Find LP program for this ticker
-        programs = await fetch_incentive_programs(
-            client,
-            status="active",
-            incentive_type="liquidity",
+        program = await get_incentive_program_for_ticker(
+            client, ticker, status="active", incentive_type="liquidity"
         )
-        program = next((p for p in programs if p.market_ticker == ticker), None)
-
-        if program is None:
-            raise ValueError(f"No active LP program found for ticker: {ticker}")
 
         # 2. Fetch orderbook
         yes_levels, no_levels = await fetch_orderbook(client, ticker)
@@ -284,7 +280,7 @@ async def run_scale_analysis(
             raise ValueError(f"No liquidity on {side} side for {ticker}")
 
         # 3. Get best bid price
-        price = max(p for p, _ in levels)
+        price = get_best_bid(levels)
 
         # 4. Run scale analysis
         return calculate_scale_analysis(
@@ -306,101 +302,19 @@ async def run_scale_analysis(
         await client.close()
 
 
-def main():
-    """CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="Analyze how ROI scales with position size for one-sided market making",
-    )
+def display_scale_analysis(analysis: ScaleAnalysis, plot: bool = True) -> None:
+    """
+    Display scale analysis results.
 
-    # Required positional arguments
-    parser.add_argument("ticker", help="Market ticker (e.g., KXSENATELA-26NOV-R)")
-    parser.add_argument(
-        "side",
-        choices=["yes", "no"],
-        help="Which side to buy (yes or no)",
-    )
+    Args:
+        analysis: ScaleAnalysis result
+        plot: Whether to show matplotlib charts (default: True)
+    """
+    print_table(analysis)
 
-    # Optional arguments with defaults
-    parser.add_argument(
-        "--your-prob",
-        type=float,
-        default=0.95,
-        help="Your probability belief (0-1, default: 0.95)",
-    )
-    parser.add_argument(
-        "--haircut",
-        type=float,
-        default=0.01,
-        help="Probability reduction if filled (default: 0.01)",
-    )
-    parser.add_argument(
-        "--fill-prob",
-        type=float,
-        default=0.5,
-        help="Probability of getting filled (default: 0.5)",
-    )
-    parser.add_argument(
-        "--max-size",
-        type=int,
-        default=1000,
-        help="Maximum position size to analyze (default: 1000)",
-    )
-    parser.add_argument(
-        "--points",
-        type=int,
-        default=20,
-        help="Number of data points to calculate (default: 20)",
-    )
-    parser.add_argument(
-        "--no-plot",
-        action="store_true",
-        help="Skip plotting, only show table",
-    )
-
-    args = parser.parse_args()
-
-    # Validate inputs
-    if not 0 < args.your_prob <= 1:
-        print("Error: your-prob must be between 0 and 1")
-        sys.exit(1)
-    if not 0 <= args.haircut < 1:
-        print("Error: haircut must be between 0 and 1")
-        sys.exit(1)
-    if not 0 < args.fill_prob <= 1:
-        print("Error: fill-prob must be between 0 and 1")
-        sys.exit(1)
-    if args.max_size <= 0:
-        print("Error: max-size must be positive")
-        sys.exit(1)
-
-    try:
-        analysis = asyncio.run(
-            run_scale_analysis(
-                ticker=args.ticker,
-                side=args.side,
-                your_prob=args.your_prob,
-                haircut=args.haircut,
-                fill_prob=args.fill_prob,
-                max_size=args.max_size,
-                num_points=args.points,
-            ),
-        )
-
-        print_table(analysis)
-
-        if not args.no_plot:
-            plot_analysis(analysis)
-
-    except KeyboardInterrupt:
-        print("\nAnalysis interrupted by user")
-        sys.exit(1)
-    except ValueError as e:
-        print(f"\nError: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\nUnexpected error: {e}")
-        sys.exit(1)
+    if plot:
+        plot_analysis(analysis)
 
 
-if __name__ == "__main__":
-    main()
+# main() function removed - now using unified CLI in cli.py
+# Use: kalshi-lp scale TICKER SIDE [--your-prob PROB] [--haircut H] [--fill-prob P] [--max-size SIZE] [--points N] [--no-plot]

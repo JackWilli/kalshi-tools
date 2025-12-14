@@ -1,35 +1,25 @@
 # src/kalshi_lp/debug_cli.py
-import asyncio
-import sys
 from typing import Dict, List, Tuple
 
+from .cli_utils import format_percent, print_section
 from .incentive_analyzer import analyze_market_opportunity
 from .kalshi_client import (
     IncentiveProgram,
-    fetch_incentive_programs,
     fetch_orderbook,
     get_client,
+    get_incentive_program_for_ticker,
 )
 from .lp_math import Side
 from .money import Money
-
-
-def format_percent(percent: float) -> str:
-    """Format percentage."""
-    return f"{percent:.2f}%"
-
-
-def print_section(title: str, char: str = "="):
-    """Print a section header."""
-    print()
-    print(char * 80)
-    print(title)
-    print(char * 80)
+from .orderbook_utils import (
+    calculate_exponential_weight,
+    sort_orderbook_levels,
+)
 
 
 def print_program_data(program: IncentiveProgram):
     """Print incentive program details."""
-    print_section("1. INCENTIVE PROGRAM DATA", "-")
+    print_section("1. INCENTIVE PROGRAM DATA", char="-")
     print(f"Program ID: {program.id}")
     print(f"Market Ticker: {program.market_ticker}")
     print(f"Start Date: {program.start_date}")
@@ -44,7 +34,7 @@ def print_program_data(program: IncentiveProgram):
         f"Daily Pool: {program.period_reward} / {program.total_days:.1f} days = {program.daily_reward_pool}/day",
     )
     print(
-        f"Remaining Rewards: {program.daily_reward_pool}/day × {program.days_remaining:.1f} days = {program.remaining_rewards}",
+        f"Remaining Rewards: {program.daily_reward_pool}/day x {program.days_remaining:.1f} days = {program.remaining_rewards}",
     )
     print()
     print(f"Target Size: {program.target_size} contracts")
@@ -56,22 +46,22 @@ def print_orderbook_data(
     no_levels: List[Tuple[int, int]],
 ):
     """Print orderbook details."""
-    print_section("2. ORDERBOOK DATA", "-")
+    print_section("2. ORDERBOOK DATA", char="-")
 
     print("YES Side (sorted by price, best first):")
-    print(f"  {'Price':<10} {'Quantity':<12} {'(Price × Qty)'}")
+    print(f"  {'Price':<10} {'Quantity':<12} {'(Price x Qty)'}")
     total_yes = 0
     for price, qty in sorted(yes_levels, key=lambda x: x[0], reverse=True):
-        print(f"  {str(Money.from_cents(price)):<10} {qty:<12} {price * qty // 100}")
+        print(f"  {Money.from_cents(price)!s:<10} {qty:<12} {price * qty // 100}")
         total_yes += qty
     print(f"  Total: {total_yes} contracts")
     print()
 
     print("NO Side (sorted by price, best first):")
-    print(f"  {'Price':<10} {'Quantity':<12} {'(Price × Qty)'}")
+    print(f"  {'Price':<10} {'Quantity':<12} {'(Price x Qty)'}")
     total_no = 0
     for price, qty in sorted(no_levels, key=lambda x: x[0], reverse=True):
-        print(f"  {str(Money.from_cents(price)):<10} {qty:<12} {price * qty // 100}")
+        print(f"  {Money.from_cents(price)!s:<10} {qty:<12} {price * qty // 100}")
         total_no += qty
     print(f"  Total: {total_no} contracts")
 
@@ -84,7 +74,7 @@ def calculate_side_with_details(
     section_number: int,
 ) -> Dict:
     """Calculate LP score with detailed step-by-step output."""
-    print_section(f"{section_number}. {side.upper()} SIDE ANALYSIS", "-")
+    print_section(f"{section_number}. {side.upper()} SIDE ANALYSIS", char="-")
 
     if not levels:
         print("No liquidity available on this side.")
@@ -97,7 +87,7 @@ def calculate_side_with_details(
         }
 
     # Sort levels by price (best first)
-    sorted_levels = sorted(levels, key=lambda x: x[0], reverse=True)
+    sorted_levels = sort_orderbook_levels(levels)
 
     # Step 1: Identify qualifying liquidity
     print(
@@ -113,7 +103,7 @@ def calculate_side_with_details(
         qualifying.append((price, qty))
         total_size += qty
         print(
-            f"  - {Money.from_cents(price)} × {qty} = {total_size} contracts (cumulative)",
+            f"  - {Money.from_cents(price)} x {qty} = {total_size} contracts (cumulative)",
         )
 
     if total_size < program.target_size:
@@ -150,18 +140,14 @@ def calculate_side_with_details(
         f"    {'Price':<8} {'Qty':<6} {'Ticks Away':<12} {'Weight':<16} {'Weighted Score'}",
     )
 
-    def weight(p: int) -> float:
-        ticks = ref_price - p
-        return program.discount_factor ** max(ticks, 0)
-
     total_weighted_score_before = 0.0
     for price, qty in qualifying:
         ticks_away = ref_price - price
-        w = weight(price)
+        w = calculate_exponential_weight(price, ref_price, program.discount_factor)
         ws = w * qty
         total_weighted_score_before += ws
         print(
-            f"    {str(Money.from_cents(price)):<8} {qty:<6} {ticks_away:<12} {program.discount_factor}^{ticks_away} = {w:.4f}  {w:.4f} × {qty} = {ws:.2f}",
+            f"    {Money.from_cents(price)!s:<8} {qty:<6} {ticks_away:<12} {program.discount_factor}^{ticks_away} = {w:.4f}  {w:.4f} x {qty} = {ws:.2f}",
         )
 
     print(f"    {'─' * 70}")
@@ -195,7 +181,10 @@ def calculate_side_with_details(
                 continue
 
             # Calculate LP score with this order
-            our_weighted_score = weight(price) * size
+            our_weighted_score = (
+                calculate_exponential_weight(price, ref_price, program.discount_factor)
+                * size
+            )
             total_weighted_score_after = (
                 total_weighted_score_before + our_weighted_score
             )
@@ -261,17 +250,17 @@ def calculate_side_with_details(
 
     for price, qty in orderbook_with_ours:
         ticks_away = ref_price - price
-        w = weight(price)
+        w = calculate_exponential_weight(price, ref_price, program.discount_factor)
         ws = w * qty
         marker = "*" if price == our_price else " "
         print(
-            f"    {str(Money.from_cents(price)):<8} {qty:<6}{marker} {ticks_away:<12} {program.discount_factor}^{ticks_away} = {w:.4f}  {w:.4f} × {qty} = {ws:.2f}",
+            f"    {Money.from_cents(price)!s:<8} {qty:<6}{marker} {ticks_away:<12} {program.discount_factor}^{ticks_away} = {w:.4f}  {w:.4f} x {qty} = {ws:.2f}",
         )
 
     print(f"    {'─' * 70}")
     print(f"    Total Weighted Score: {best_placement['total_weighted_score']:.2f}")
     print(
-        f"    Our Weighted Score: {weight(int(our_price)):.4f} × {our_size} = {best_placement['our_weighted_score']:.2f}",
+        f"    Our Weighted Score: {calculate_exponential_weight(int(our_price), ref_price, program.discount_factor):.4f} x {our_size} = {best_placement['our_weighted_score']:.2f}",
     )
     print()
 
@@ -287,9 +276,9 @@ def calculate_side_with_details(
     print("Step 7: Calculate Expected Rewards")
     expected_rewards_total: Money = program.remaining_rewards * best_placement["lp_score"]
     expected_rewards_per_day: Money = expected_rewards_total / max(program.days_remaining, 1)
-    print("  Expected Rewards (total) = LP Score × Remaining Rewards")
+    print("  Expected Rewards (total) = LP Score x Remaining Rewards")
     print(
-        f"  Expected Rewards (total) = {best_placement['lp_score']:.4f} × {program.remaining_rewards} = {expected_rewards_total}",
+        f"  Expected Rewards (total) = {best_placement['lp_score']:.4f} x {program.remaining_rewards} = {expected_rewards_total}",
     )
     print(
         f"  Expected Rewards (per day) = {expected_rewards_total} / {program.days_remaining:.1f} days = {expected_rewards_per_day}/day",
@@ -298,9 +287,9 @@ def calculate_side_with_details(
 
     # Step 8: Capital Required
     print("Step 8: Calculate Capital Required")
-    capital = Money.from_cents(int(best_placement['price'])) * int(best_placement['size'])
+    capital = Money.from_cents(int(best_placement["price"])) * int(best_placement["size"])
     print(
-        f"  Capital = Price × Size = {Money.from_cents(int(best_placement['price']))} × {best_placement['size']} = {capital}",
+        f"  Capital = Price x Size = {Money.from_cents(int(best_placement['price']))} x {best_placement['size']} = {capital}",
     )
     print()
 
@@ -312,7 +301,7 @@ def calculate_side_with_details(
         else 0.0
     )
     print(
-        f"  Gross ROI/day = ({expected_rewards_per_day} / {capital}) × 100% = {format_percent(roi_per_day)} per day",
+        f"  Gross ROI/day = ({expected_rewards_per_day} / {capital}) x 100% = {format_percent(roi_per_day)} per day",
     )
     print()
 
@@ -325,11 +314,11 @@ def calculate_side_with_details(
     adverse_cost_per_day: Money = cost_per_fill * expected_fills
     print(f"  Fill Rate: {fill_rate * 100:.0f}%, Adverse Ticks: {adverse_ticks} cents")
     print(
-        f"  Expected Fills/day = {our_size} × {fill_rate} = {expected_fills:.1f} fills",
+        f"  Expected Fills/day = {our_size} x {fill_rate} = {expected_fills:.1f} fills",
     )
     print(f"  Cost per fill = {cost_per_fill}")
     print(
-        f"  Adverse Selection Cost = {expected_fills:.1f} × {cost_per_fill} = {adverse_cost_per_day}/day",
+        f"  Adverse Selection Cost = {expected_fills:.1f} x {cost_per_fill} = {adverse_cost_per_day}/day",
     )
     print()
 
@@ -345,7 +334,7 @@ def calculate_side_with_details(
         f"  Net Rewards/day = {expected_rewards_per_day} - {adverse_cost_per_day} = {net_rewards_per_day}/day",
     )
     print(
-        f"  Net ROI/day = ({net_rewards_per_day} / {capital}) × 100% = {format_percent(net_roi_per_day)} per day",
+        f"  Net ROI/day = ({net_rewards_per_day} / {capital}) x 100% = {format_percent(net_roi_per_day)} per day",
     )
 
     return {
@@ -374,23 +363,13 @@ async def debug_market_analysis(ticker: str, max_capital: float = 5000.0):
         return
 
     try:
-        # Fetch incentive programs
-        programs = await fetch_incentive_programs(
-            client,
-            status="active",
-            incentive_type="liquidity",
-        )
-
-        # Find program for this ticker
-        program = None
-        for p in programs:
-            if p.market_ticker == ticker:
-                program = p
-                break
-
-        if program is None:
+        # Fetch incentive program for this ticker
+        try:
+            program = await get_incentive_program_for_ticker(
+                client, ticker, status="active", incentive_type="liquidity"
+            )
+        except ValueError:
             print(f"Error: No active liquidity incentive program found for {ticker}")
-            print(f"Found {len(programs)} programs total, but none match this ticker.")
             return
 
         # Fetch orderbook
@@ -421,7 +400,7 @@ async def debug_market_analysis(ticker: str, max_capital: float = 5000.0):
         )
 
         # Run analyzer for comparison
-        print_section("5. ANALYZER COMPARISON", "-")
+        print_section("5. ANALYZER COMPARISON", char="-")
         print("Running full analyzer for comparison...")
         analyzer_result = await analyze_market_opportunity(client, program, Money.from_dollars(max_capital))
 
@@ -466,39 +445,5 @@ async def debug_market_analysis(ticker: str, max_capital: float = 5000.0):
         await client.close()
 
 
-def main():
-    """CLI entry point."""
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Debug Kalshi liquidity incentive calculations for a specific market",
-    )
-    parser.add_argument(
-        "ticker",
-        type=str,
-        help="Market ticker to analyze (e.g., KXMTGSWITCH-27JAN-CUEL)",
-    )
-    parser.add_argument(
-        "--max-capital",
-        type=float,
-        default=5000.0,
-        help="Maximum capital to simulate per side (default: $5000)",
-    )
-
-    args = parser.parse_args()
-
-    try:
-        asyncio.run(debug_market_analysis(args.ticker, args.max_capital))
-    except KeyboardInterrupt:
-        print("\nAnalysis interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\nUnexpected error: {e}")
-        import traceback
-
-        traceback.print_exc()
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
+# main() function removed - now using unified CLI in cli.py
+# Use: kalshi-lp debug TICKER [--max-capital AMOUNT]

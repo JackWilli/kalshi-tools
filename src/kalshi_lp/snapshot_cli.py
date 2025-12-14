@@ -1,7 +1,4 @@
 # src/kalshi_lp/snapshot_cli.py
-import argparse
-import asyncio
-
 from .kalshi_client import (
     fetch_my_resting_bids,
     fetch_orderbook,
@@ -67,24 +64,5 @@ async def _run(
             await close()
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser("kalshi-lp-snapshot")
-    parser.add_argument("ticker", help="Market ticker")
-    parser.add_argument("--target-size", type=int, required=True)
-    parser.add_argument("--discount-factor", type=float, required=True)
-    parser.add_argument(
-        "--lp-rewards-dollars",
-        type=float,
-        required=True,
-        help="Total LP rewards pool in dollars",
-    )
-    args = parser.parse_args()
-
-    asyncio.run(
-        _run(
-            ticker=args.ticker,
-            target_size=args.target_size,
-            discount_factor=args.discount_factor,
-            lp_rewards_dollars=args.lp_rewards_dollars,
-        ),
-    )
+# main() function removed - now using unified CLI in cli.py
+# Use: kalshi-lp snapshot TICKER --target-size X --discount-factor Y --lp-rewards-dollars Z

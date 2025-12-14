@@ -12,6 +12,7 @@ from .lp_math import (
     normalized_side_score_to_rewards,
 )
 from .money import Money
+from .orderbook_utils import sort_orderbook_levels
 
 
 @dataclass
@@ -116,7 +117,9 @@ def calculate_marginal_lp_score(
     """
     # Add our new simulated order to existing orders
     simulated_orders = list(my_existing_orders)
-    simulated_orders.append(LPOrder(side=side, price=Money.from_cents(new_price), quantity=new_size))
+    simulated_orders.append(
+        LPOrder(side=side, price=Money.from_cents(new_price), quantity=new_size)
+    )
 
     # Add the new order to the orderbook as well (so denominator is correct)
     updated_levels = list(side_levels)
@@ -148,7 +151,6 @@ def optimize_side_placement(
     discount_factor: float,
     max_capital: Money,
     side: Side,
-    is_buy: bool = True,
 ) -> Tuple[Optional[Money], int, float]:
     """
     Find optimal (price, size) to maximize LP score per dollar deployed.
@@ -160,7 +162,6 @@ def optimize_side_placement(
         discount_factor: Program discount factor
         max_capital: Maximum capital to deploy
         side: "yes" or "no"
-        is_buy: Whether we're buying (True) or selling (False)
 
     Returns:
         (optimal_price, optimal_size, expected_lp_score)
@@ -169,7 +170,7 @@ def optimize_side_placement(
         return None, 0, 0.0
 
     # Sort levels by price (highest first for better comparison)
-    sorted_levels = sorted(side_levels, key=lambda x: x[0], reverse=True)
+    sorted_levels = sort_orderbook_levels(side_levels)
     best_price_cents = sorted_levels[0][0]
 
     # Try different price levels (best bid, best-1, best-2, etc.)
@@ -187,7 +188,9 @@ def optimize_side_placement(
 
         # Calculate affordable size at this price
         capital_per_contract = price  # Money
-        max_affordable_size = int(max_capital.centicents / capital_per_contract.centicents)
+        max_affordable_size = int(
+            max_capital.centicents / capital_per_contract.centicents
+        )
 
         if max_affordable_size <= 0:
             continue
@@ -265,7 +268,6 @@ async def analyze_side(
         discount_factor=program.discount_factor,
         max_capital=max_capital,
         side=side,
-        is_buy=True,
     )
 
     # Calculate metrics
