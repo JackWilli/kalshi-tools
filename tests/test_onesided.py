@@ -23,7 +23,9 @@ class TestCalculateOnesidedReturn:
             size=100,  # contracts
             fill_prob=0.5,  # probability (0-1)
             lp_score=0.10,  # fraction (0-1) - normalized side score
-            total_daily_pool=Money.from_dollars(10.0),  # $/day (entire market, both sides)
+            total_daily_pool=Money.from_dollars(
+                10.0
+            ),  # $/day (entire market, both sides)
             lp_days=100,  # days
         )
 

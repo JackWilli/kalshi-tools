@@ -5,7 +5,8 @@ for all valid inputs, ensuring correctness across a wide range of scenarios.
 """
 
 import pytest
-from hypothesis import assume, given, strategies as st
+from hypothesis import assume, given
+from hypothesis import strategies as st
 
 from kalshi_lp.lp_math import LPOrder, _compute_side_score
 from kalshi_lp.money import Money
@@ -71,7 +72,11 @@ class TestMoneyArithmeticProperties:
         # Use smaller values to avoid overflow without excessive filtering
         assert (a * n) * m == a * (n * m)
 
-    @given(a=money_strategy(), b=money_strategy(), n=st.integers(min_value=-100, max_value=100))
+    @given(
+        a=money_strategy(),
+        b=money_strategy(),
+        n=st.integers(min_value=-100, max_value=100),
+    )
     def test_distributive_property(self, a: Money, b: Money, n: int):
         """Multiplication distributes over addition: n * (a + b) == n * a + n * b."""
         assert n * (a + b) == n * a + n * b
@@ -79,7 +84,7 @@ class TestMoneyArithmeticProperties:
     @given(a=money_strategy())
     def test_negation_inverse(self, a: Money):
         """Negation should be self-inverse: -(-a) == a."""
-        assert -(-a) == a
+        assert -(-a) == a  # noqa: B002 - intentional double negation, not decrement
 
     @given(a=money_strategy())
     def test_negation_additive_inverse(self, a: Money):
@@ -166,7 +171,9 @@ class TestExponentialWeightProperties:
         ref_price=st.integers(min_value=1, max_value=100),
         discount_factor=st.floats(min_value=0.5, max_value=0.99),
     )
-    def test_weight_always_positive(self, price: int, ref_price: int, discount_factor: float):
+    def test_weight_always_positive(
+        self, price: int, ref_price: int, discount_factor: float
+    ):
         """Weight should always be positive."""
         weight = calculate_exponential_weight(price, ref_price, discount_factor)
         assert weight > 0
@@ -175,7 +182,9 @@ class TestExponentialWeightProperties:
         ref_price=st.integers(min_value=1, max_value=100),
         discount_factor=st.floats(min_value=0.5, max_value=0.99),
     )
-    def test_weight_at_reference_price_is_one(self, ref_price: int, discount_factor: float):
+    def test_weight_at_reference_price_is_one(
+        self, ref_price: int, discount_factor: float
+    ):
         """Weight at reference price should be 1.0."""
         weight = calculate_exponential_weight(ref_price, ref_price, discount_factor)
         assert weight == 1.0
@@ -185,7 +194,9 @@ class TestExponentialWeightProperties:
         ref_price=st.integers(min_value=1, max_value=100),
         discount_factor=st.floats(min_value=0.5, max_value=0.99),
     )
-    def test_weight_bounded_by_one(self, price: int, ref_price: int, discount_factor: float):
+    def test_weight_bounded_by_one(
+        self, price: int, ref_price: int, discount_factor: float
+    ):
         """Weight should never exceed 1.0 (best weight is at reference price)."""
         weight = calculate_exponential_weight(price, ref_price, discount_factor)
         assert weight <= 1.0
@@ -212,7 +223,9 @@ class TestExponentialWeightProperties:
         ref_price=st.integers(min_value=1, max_value=100),
         discount_factor=st.floats(min_value=0.5, max_value=0.99),
     )
-    def test_weight_above_reference_is_one(self, ref_price: int, discount_factor: float):
+    def test_weight_above_reference_is_one(
+        self, ref_price: int, discount_factor: float
+    ):
         """Prices above reference price should also get weight 1.0 (capped)."""
         # Based on formula: discount_factor ^ max(ref_price - price, 0)
         # When price > ref_price, the exponent is max(negative, 0) = 0, so weight = df^0 = 1
@@ -236,7 +249,9 @@ class TestExponentialWeightProperties:
 
 
 @st.composite
-def orderbook_levels_strategy(draw, min_levels=0, max_levels=10, min_price=1, max_price=99):
+def orderbook_levels_strategy(
+    draw, min_levels=0, max_levels=10, min_price=1, max_price=99
+):
     """Generate realistic orderbook levels.
 
     Prices are constrained to 1-99 cents, representing valid market probabilities.
@@ -262,7 +277,9 @@ def lp_orders_strategy(draw, side="yes", min_orders=0, max_orders=5):
         # Valid market prices: 1-99 cents (representing 1%-99% probability)
         price_cents = draw(st.integers(min_value=1, max_value=99))
         qty = draw(st.integers(min_value=1, max_value=1000))
-        orders.append(LPOrder(side=side, price=Money.from_cents(price_cents), quantity=qty))
+        orders.append(
+            LPOrder(side=side, price=Money.from_cents(price_cents), quantity=qty)
+        )
     return orders
 
 
@@ -347,7 +364,9 @@ class TestLPScoreProperties:
         target_size=st.integers(min_value=100, max_value=10000),
         discount_factor=st.floats(min_value=0.5, max_value=0.99),
     )
-    def test_no_orders_gives_zero_score(self, side_levels, target_size, discount_factor):
+    def test_no_orders_gives_zero_score(
+        self, side_levels, target_size, discount_factor
+    ):
         """Having no orders should give zero score."""
         normalized_score, _, _, my_score = _compute_side_score(
             side_levels=side_levels,
@@ -358,7 +377,9 @@ class TestLPScoreProperties:
         assert normalized_score == 0.0
         assert my_score == 0.0
 
-    @pytest.mark.skip(reason="Same issue as test_score_bounded_zero_to_one - see note above")
+    @pytest.mark.skip(
+        reason="Same issue as test_score_bounded_zero_to_one - see note above"
+    )
     @given(
         side_levels=orderbook_levels_strategy(min_levels=1),
         my_orders=lp_orders_strategy(),

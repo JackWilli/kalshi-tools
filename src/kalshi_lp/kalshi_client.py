@@ -44,17 +44,6 @@ class IncentiveProgram:
         """Total remaining rewards to be earned."""
         return self.daily_reward_pool * self.days_remaining
 
-    # Backward-compatible properties (DEPRECATED)
-    @property
-    def period_reward_dollars(self) -> float:
-        """DEPRECATED: Use period_reward.dollars instead."""
-        return self.period_reward.dollars
-
-    @property
-    def remaining_rewards_dollars(self) -> float:
-        """DEPRECATED: Use remaining_rewards.dollars instead."""
-        return self.remaining_rewards.dollars
-
 
 def get_client() -> KalshiClient:
     api_key_id = os.environ["KALSHI_API_KEY_ID"]
@@ -223,7 +212,9 @@ async def fetch_incentive_programs(
                         market_ticker=prog.market_ticker,
                         start_date=start_date,
                         end_date=end_date,
-                        period_reward=Money.from_centicents(prog.period_reward),  # API returns centicents
+                        period_reward=Money.from_centicents(
+                            prog.period_reward
+                        ),  # API returns centicents
                         discount_factor=discount_factor,
                         target_size=target_size,
                         days_remaining=days_remaining,
@@ -272,9 +263,7 @@ async def get_incentive_program_for_ticker(
     programs = await fetch_incentive_programs(
         client, status=status, incentive_type=incentive_type
     )
-    incentive_program = next(
-        (p for p in programs if p.market_ticker == ticker), None
-    )
+    incentive_program = next((p for p in programs if p.market_ticker == ticker), None)
 
     if incentive_program is None:
         raise ValueError(

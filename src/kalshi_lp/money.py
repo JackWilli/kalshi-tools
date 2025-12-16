@@ -340,7 +340,9 @@ class Money:
             format_spec = format_spec[1:]
 
         # Format the dollar amount
-        formatted = format(self.dollars, format_spec) if format_spec else f"{self.dollars:.2f}"
+        formatted = (
+            format(self.dollars, format_spec) if format_spec else f"{self.dollars:.2f}"
+        )
 
         return f"{sign_prefix}${formatted}"
 

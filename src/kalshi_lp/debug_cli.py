@@ -274,8 +274,12 @@ def calculate_side_with_details(
 
     # Step 7: Expected Rewards
     print("Step 7: Calculate Expected Rewards")
-    expected_rewards_total: Money = program.remaining_rewards * best_placement["lp_score"]
-    expected_rewards_per_day: Money = expected_rewards_total / max(program.days_remaining, 1)
+    expected_rewards_total: Money = (
+        program.remaining_rewards * best_placement["lp_score"]
+    )
+    expected_rewards_per_day: Money = expected_rewards_total / max(
+        program.days_remaining, 1
+    )
     print("  Expected Rewards (total) = LP Score x Remaining Rewards")
     print(
         f"  Expected Rewards (total) = {best_placement['lp_score']:.4f} x {program.remaining_rewards} = {expected_rewards_total}",
@@ -287,7 +291,9 @@ def calculate_side_with_details(
 
     # Step 8: Capital Required
     print("Step 8: Calculate Capital Required")
-    capital = Money.from_cents(int(best_placement["price"])) * int(best_placement["size"])
+    capital = Money.from_cents(int(best_placement["price"])) * int(
+        best_placement["size"]
+    )
     print(
         f"  Capital = Price x Size = {Money.from_cents(int(best_placement['price']))} x {best_placement['size']} = {capital}",
     )
@@ -295,11 +301,7 @@ def calculate_side_with_details(
 
     # Step 9: ROI
     print("Step 9: Calculate ROI")
-    roi_per_day = (
-        (expected_rewards_per_day / capital) * 100
-        if capital
-        else 0.0
-    )
+    roi_per_day = (expected_rewards_per_day / capital) * 100 if capital else 0.0
     print(
         f"  Gross ROI/day = ({expected_rewards_per_day} / {capital}) x 100% = {format_percent(roi_per_day)} per day",
     )
@@ -325,11 +327,7 @@ def calculate_side_with_details(
     # Step 11: Net ROI
     print("Step 11: Net ROI")
     net_rewards_per_day: Money = expected_rewards_per_day - adverse_cost_per_day
-    net_roi_per_day: float = (
-        (net_rewards_per_day / capital) * 100
-        if capital
-        else 0.0
-    )
+    net_roi_per_day: float = (net_rewards_per_day / capital) * 100 if capital else 0.0
     print(
         f"  Net Rewards/day = {expected_rewards_per_day} - {adverse_cost_per_day} = {net_rewards_per_day}/day",
     )
@@ -402,7 +400,9 @@ async def debug_market_analysis(ticker: str, max_capital: float = 5000.0):
         # Run analyzer for comparison
         print_section("5. ANALYZER COMPARISON", char="-")
         print("Running full analyzer for comparison...")
-        analyzer_result = await analyze_market_opportunity(client, program, Money.from_dollars(max_capital))
+        analyzer_result = await analyze_market_opportunity(
+            client, program, Money.from_dollars(max_capital)
+        )
 
         print()
         print("Manual Calculation Results:")
