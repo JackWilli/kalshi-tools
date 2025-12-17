@@ -1,11 +1,11 @@
 [project]
-name = "kalshi-market-maker"
+name = "kalshi-tools"
 version = "0.1.0"
 description = "Tooling for Kalshi"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "kalshi-python-async>=3.1.0",
+    "kalshi-python-async>=3.2.0",
     "matplotlib>=3.10.8",
     "python-dotenv>=1.2.1",
     "urllib3>=2.6.2",
@@ -18,7 +18,7 @@ dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "ruff>=0.14.9",
-    "ty>=0.0.1a34",
+    "ty>=0.0.2",
 ]
 
 [project.scripts]
