@@ -174,7 +174,9 @@ class TestExponentialWeightProperties:
     def test_weight_always_positive(
         self, price: int, ref_price: int, discount_factor: float
     ):
-        """Weight should always be positive."""
+        """Weight should always be positive for valid qualifying bids."""
+        # Only test valid qualifying bids where price <= ref_price
+        assume(price <= ref_price)
         weight = calculate_exponential_weight(price, ref_price, discount_factor)
         assert weight > 0
 
@@ -197,7 +199,13 @@ class TestExponentialWeightProperties:
     def test_weight_bounded_by_one(
         self, price: int, ref_price: int, discount_factor: float
     ):
-        """Weight should never exceed 1.0 (best weight is at reference price)."""
+        """Weight should never exceed 1.0 for valid qualifying bids (price <= ref_price).
+
+        This validates the constraint that qualifying bids always have price <= ref_price,
+        so weights are naturally bounded at 1.0 (achieved at reference price).
+        """
+        # Only test valid qualifying bids where price <= ref_price
+        assume(price <= ref_price)
         weight = calculate_exponential_weight(price, ref_price, discount_factor)
         assert weight <= 1.0
 
@@ -223,15 +231,13 @@ class TestExponentialWeightProperties:
         ref_price=st.integers(min_value=1, max_value=100),
         discount_factor=st.floats(min_value=0.5, max_value=0.99),
     )
-    def test_weight_above_reference_is_one(
+    def test_weight_rejects_price_above_reference(
         self, ref_price: int, discount_factor: float
     ):
-        """Prices above reference price should also get weight 1.0 (capped)."""
-        # Based on formula: discount_factor ^ max(ref_price - price, 0)
-        # When price > ref_price, the exponent is max(negative, 0) = 0, so weight = df^0 = 1
-        price_above = ref_price + 10
-        weight = calculate_exponential_weight(price_above, ref_price, discount_factor)
-        assert weight == 1.0
+        """Should raise ValueError when price > ref_price."""
+        price_above = ref_price + 1
+        with pytest.raises(ValueError, match="cannot exceed reference price"):
+            calculate_exponential_weight(price_above, ref_price, discount_factor)
 
     @given(
         price=st.integers(min_value=1, max_value=100),
@@ -239,6 +245,8 @@ class TestExponentialWeightProperties:
     )
     def test_weight_with_discount_one_is_always_one(self, price: int, ref_price: int):
         """When discount_factor=1.0, all weights should be 1.0."""
+        # Only test valid case where price <= ref_price
+        assume(price <= ref_price)
         weight = calculate_exponential_weight(price, ref_price, discount_factor=1.0)
         assert weight == 1.0
 
