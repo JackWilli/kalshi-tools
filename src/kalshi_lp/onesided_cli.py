@@ -6,6 +6,7 @@ Evaluates expected returns and risk for placing limit orders on positions
 you'd hold anyway, combining directional position EV with LP rewards.
 """
 
+import time
 from dataclasses import dataclass
 from math import sqrt
 from typing import Literal
@@ -16,9 +17,12 @@ from .kalshi_client import (
     get_client,
     get_incentive_program_for_ticker,
 )
+from .logging_utils import get_logger, log_analysis_complete, log_analysis_start
 from .lp_math import normalized_side_score_to_rewards
 from .money import Money
 from .orderbook_utils import get_best_bid, sort_orderbook_levels
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -214,14 +218,19 @@ async def run_analysis(
     fill_prob: float,
 ) -> OneSidedAnalysis:
     """Fetch market data and run calculations."""
+    start_time = time.time()
+    log_analysis_start(logger, ticker, "onesided")
+
     client = get_client()
     try:
         # 1. Find LP program for this ticker
+        logger.debug(f"Fetching LP program for {ticker}")
         program = await get_incentive_program_for_ticker(
             client, ticker, status="active", incentive_type="liquidity"
         )
 
         # 2. Fetch orderbook
+        logger.debug(f"Fetching orderbook for {ticker} {side} side")
         yes_levels, no_levels = await fetch_orderbook(client, ticker)
         levels = yes_levels if side == "yes" else no_levels
 
@@ -244,7 +253,7 @@ async def run_analysis(
         )
 
         # 5. Run pure calculation
-        return calculate_onesided_return(
+        result = calculate_onesided_return(
             ticker=ticker,
             side=side,
             price=price,
@@ -256,6 +265,12 @@ async def run_analysis(
             total_daily_pool=program.daily_reward_pool,
             lp_days=program.days_remaining,
         )
+
+        # Log completion
+        duration_ms = (time.time() - start_time) * 1000
+        log_analysis_complete(logger, ticker, "onesided", duration_ms)
+
+        return result
     finally:
         await client.close()
 

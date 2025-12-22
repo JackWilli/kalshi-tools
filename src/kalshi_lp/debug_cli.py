@@ -1,4 +1,5 @@
 # src/kalshi_lp/debug_cli.py
+import time
 from typing import Dict, List, Tuple
 
 from .cli_utils import format_percent, print_section
@@ -9,12 +10,15 @@ from .kalshi_client import (
     get_client,
     get_incentive_program_for_ticker,
 )
+from .logging_utils import get_logger, log_analysis_complete, log_analysis_start
 from .lp_math import Side
 from .money import Money
 from .orderbook_utils import (
     calculate_exponential_weight,
     sort_orderbook_levels,
 )
+
+logger = get_logger(__name__)
 
 
 def print_program_data(program: IncentiveProgram):
@@ -348,6 +352,9 @@ def calculate_side_with_details(
 
 async def debug_market_analysis(ticker: str, max_capital: float = 5000.0):
     """Perform detailed step-by-step analysis of a single market."""
+    start_time = time.time()
+    log_analysis_start(logger, ticker, "debug")
+
     print("=" * 80)
     print(f"MARKET ANALYSIS: {ticker}")
     print("=" * 80)
@@ -440,6 +447,10 @@ async def debug_market_analysis(ticker: str, max_capital: float = 5000.0):
                 print(f"  YES LP Score differs by {yes_lp_diff * 100:.2f}%")
             if no_lp_diff > 0.01:
                 print(f"  NO LP Score differs by {no_lp_diff * 100:.2f}%")
+
+        # Log completion
+        duration_ms = (time.time() - start_time) * 1000
+        log_analysis_complete(logger, ticker, "debug", duration_ms)
 
     finally:
         await client.close()

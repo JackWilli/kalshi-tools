@@ -1,10 +1,14 @@
 # src/kalshi_lp/analyze_cli.py
+import time
 from typing import List
 
 from .cli_utils import format_percent, print_section
 from .incentive_analyzer import MarketOpportunity, analyze_market_opportunity
 from .kalshi_client import fetch_incentive_programs, get_client
+from .logging_utils import get_logger
 from .money import Money
+
+logger = get_logger(__name__)
 
 
 def print_opportunity(opp: MarketOpportunity, rank: int):
@@ -116,6 +120,18 @@ async def analyze_incentives(
         top_n: Number of top opportunities to show in summary
         show_all: Show all opportunities, even non-viable ones
     """
+    start_time = time.time()
+    logger.info(
+        "Starting incentive analysis",
+        extra={
+            "extra_fields": {
+                "min_roi": min_roi,
+                "max_capital_per_side": max_capital_per_side,
+                "top_n": top_n,
+                "show_all": show_all,
+            }
+        },
+    )
     print_section("KALSHI LIQUIDITY INCENTIVE ANALYSIS")
 
     # Get client
@@ -145,8 +161,13 @@ async def analyze_incentives(
 
         if not programs:
             print("No active liquidity incentive programs found.")
+            logger.info("No active programs found")
             return
 
+        logger.info(
+            f"Found {len(programs)} active programs",
+            extra={"extra_fields": {"program_count": len(programs)}},
+        )
         print(f"Found {len(programs)} active liquidity incentive program(s)")
         print()
 
@@ -155,6 +176,7 @@ async def analyze_incentives(
         opportunities: List[MarketOpportunity] = []
 
         for i, program in enumerate(programs, 1):
+            logger.debug(f"Analyzing {program.market_ticker} ({i}/{len(programs)})")
             print(
                 f"  [{i}/{len(programs)}] Analyzing {program.market_ticker}...",
                 end="\r",
@@ -205,6 +227,21 @@ async def analyze_incentives(
 
         # Portfolio summary
         print_portfolio_summary(filtered_opps, top_n)
+
+        # Log completion
+        duration_ms = (time.time() - start_time) * 1000
+        logger.info(
+            "Completed incentive analysis",
+            extra={
+                "extra_fields": {
+                    "duration_ms": duration_ms,
+                    "markets_analyzed": len(programs),
+                    "viable_opportunities": len(
+                        [opp for opp in filtered_opps if opp.best_side is not None]
+                    ),
+                }
+            },
+        )
     finally:
         # Close the client session to prevent resource leaks
         await client.close()

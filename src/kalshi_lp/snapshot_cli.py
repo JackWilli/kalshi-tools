@@ -1,11 +1,16 @@
 # src/kalshi_lp/snapshot_cli.py
+import time
+
 from .kalshi_client import (
     fetch_my_resting_bids,
     fetch_orderbook,
     get_client,
     verify_market_exists,
 )
+from .logging_utils import get_logger, log_analysis_complete, log_analysis_start
 from .lp_math import compute_snapshot_lp_score
+
+logger = get_logger(__name__)
 
 
 async def _run(
@@ -14,6 +19,9 @@ async def _run(
     discount_factor: float,
     lp_rewards_dollars: float,
 ):
+    start_time = time.time()
+    log_analysis_start(logger, ticker, "snapshot")
+
     client = get_client()
     try:
         # First verify the market exists
@@ -42,6 +50,8 @@ async def _run(
             return
         expected_rewards = combined_score * lp_rewards_dollars
 
+        logger.debug(f"Computed LP score: {combined_score:.6f}")
+
         print(f"Market: {ticker}")
         print(f"  YES normalized score: {result['yes_normalized']:.6f}")
         print(f"  NO  normalized score: {result['no_normalized']:.6f}")
@@ -58,6 +68,11 @@ async def _run(
         print(
             f"  NO  my weighted / total: {result['no_my_weighted']:.4f} / {result['no_total_weighted']:.4f}",
         )
+
+        # Log completion
+        duration_ms = (time.time() - start_time) * 1000
+        log_analysis_complete(logger, ticker, "snapshot", duration_ms)
+
     finally:
         close = getattr(client, "close", None)
         if callable(close):

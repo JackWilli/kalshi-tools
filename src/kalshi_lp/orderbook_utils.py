@@ -45,16 +45,28 @@ def calculate_exponential_weight(
     """
     Calculate exponential weight for LP score calculation.
 
-    The weight decreases exponentially based on distance from reference price.
-    Formula: discount_factor ^ max(ref_price - price, 0)
+    Formula: discount_factor ^ (ref_price - price)
 
     Args:
-        price: Price in cents
-        ref_price: Reference price in cents
-        discount_factor: Discount factor (typically 0.9)
+        price: Bid price in cents (must be <= ref_price)
+        ref_price: Reference price (highest qualifying bid) in cents
+        discount_factor: Exponential decay factor (typically 0.9)
 
     Returns:
-        Calculated weight (always >= 0)
+        Weight in range (0, 1] for valid qualifying bids
+
+    Raises:
+        ValueError: If price > ref_price (invalid for qualifying bids)
+
+    Note:
+        For qualifying bids in LP scoring:
+        - At reference (price == ref_price): weight = 1.0
+        - Below reference: weight < 1.0 (exponential decay)
     """
+    if price > ref_price:
+        raise ValueError(
+            f"Price ({price}) cannot exceed reference price ({ref_price}). "
+            f"Reference is defined as the highest qualifying bid."
+        )
     ticks = ref_price - price
-    return discount_factor ** max(ticks, 0)
+    return discount_factor ** ticks

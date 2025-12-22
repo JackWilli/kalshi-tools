@@ -7,10 +7,13 @@ from typing import List, Optional, Tuple
 from dotenv import load_dotenv
 from kalshi_python_async import Configuration, KalshiClient
 
+from .logging_utils import get_logger, log_api_call, log_error
 from .lp_math import LPOrder, Side
 from .money import Money
 
 load_dotenv()
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -64,13 +67,28 @@ def get_client() -> KalshiClient:
 async def verify_market_exists(client: KalshiClient, ticker: str) -> bool:
     """Check if a market exists and return basic info."""
     try:
+        logger.debug(f"Verifying market exists: {ticker}")
+        log_api_call(logger, "GET", f"/markets/{ticker}", ticker=ticker)
         response = await client.get_market(ticker=ticker)
         market = response.market
+        logger.info(
+            f"Market verified: {market.ticker}",
+            extra={
+                "extra_fields": {
+                    "ticker": market.ticker,
+                    "status": market.status,
+                    "title": market.title,
+                }
+            },
+        )
         print(f"Found market: {market.ticker}")
         print(f"  Title: {market.title}")
         print(f"  Status: {market.status}")
         return True
     except Exception as e:
+        log_error(
+            logger, "api_error", f"Could not find market '{ticker}'", ticker=ticker
+        )
         print(f"Error: Could not find market '{ticker}'")
         print(f"Details: {e}")
         return False
@@ -80,6 +98,8 @@ async def fetch_orderbook(
     client: KalshiClient,
     ticker: str,
 ) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+    logger.debug(f"Fetching orderbook for {ticker}")
+    log_api_call(logger, "GET", f"/markets/{ticker}/orderbook", ticker=ticker)
     ob_resp = await client.get_market_orderbook(ticker=ticker)
 
     # Convert price from dollars (string) to cents (int), quantity is already int
@@ -88,6 +108,17 @@ async def fetch_orderbook(
         (int(float(p) * 100), int(q)) for p, q in ob_resp.orderbook.yes_dollars
     ]
     no_levels = [(int(float(p) * 100), int(q)) for p, q in ob_resp.orderbook.no_dollars]
+
+    logger.debug(
+        f"Retrieved orderbook: {len(yes_levels)} YES levels, {len(no_levels)} NO levels",
+        extra={
+            "extra_fields": {
+                "ticker": ticker,
+                "yes_levels": len(yes_levels),
+                "no_levels": len(no_levels),
+            }
+        },
+    )
     return yes_levels, no_levels
 
 
@@ -95,6 +126,8 @@ async def fetch_my_resting_bids(
     client: KalshiClient,
     ticker: str,
 ) -> List[LPOrder]:
+    logger.debug(f"Fetching resting bids for {ticker}")
+    log_api_call(logger, "GET", "/orders", ticker=ticker, status="resting")
     resp = await client.get_orders(
         ticker=ticker,
         status="resting",
@@ -128,6 +161,10 @@ async def fetch_my_resting_bids(
             ),
         )
 
+    logger.debug(
+        f"Found {len(orders)} resting bids",
+        extra={"extra_fields": {"ticker": ticker, "order_count": len(orders)}},
+    )
     return orders
 
 
@@ -147,6 +184,10 @@ async def fetch_incentive_programs(
     Returns:
         List of IncentiveProgram objects
     """
+    logger.info(
+        f"Fetching incentive programs: status={status}, type={incentive_type}",
+        extra={"extra_fields": {"status": status, "incentive_type": incentive_type}},
+    )
     programs: List[IncentiveProgram] = []
     cursor: Optional[str] = None
 
@@ -154,6 +195,9 @@ async def fetch_incentive_programs(
     while True:
         try:
             # Call SDK method - filtering by type happens after fetching
+            log_api_call(
+                logger, "GET", "/incentive_programs", status=status, cursor=cursor
+            )
             if cursor:
                 response = await client.get_incentive_programs(
                     status=status,
@@ -162,7 +206,12 @@ async def fetch_incentive_programs(
                 )
             else:
                 response = await client.get_incentive_programs(status=status, limit=100)
+
+            logger.debug(
+                f"Fetched page with {len(response.incentive_programs)} programs"
+            )
         except Exception as e:
+            log_error(logger, "api_error", f"Error fetching incentive programs: {e}")
             print(f"Error fetching incentive programs: {e}")
             import traceback
 
@@ -232,6 +281,10 @@ async def fetch_incentive_programs(
         if not cursor:
             break
 
+    logger.info(
+        f"Fetched {len(programs)} total incentive programs",
+        extra={"extra_fields": {"program_count": len(programs)}},
+    )
     return programs
 
 
@@ -260,14 +313,24 @@ async def get_incentive_program_for_ticker(
     Raises:
         ValueError: If no matching incentive program is found
     """
+    logger.debug(f"Searching for incentive program: ticker={ticker}")
     programs = await fetch_incentive_programs(
         client, status=status, incentive_type=incentive_type
     )
     incentive_program = next((p for p in programs if p.market_ticker == ticker), None)
 
     if incentive_program is None:
+        log_error(
+            logger,
+            "not_found",
+            f"No {status} {incentive_type} incentive program found for ticker: {ticker}",
+            ticker=ticker,
+            status=status,
+            incentive_type=incentive_type,
+        )
         raise ValueError(
             f"No {status} {incentive_type} incentive program found for ticker: {ticker}"
         )
 
+    logger.debug(f"Found incentive program for {ticker}")
     return incentive_program

@@ -6,6 +6,10 @@ Eliminates duplicate validation logic across command modules.
 
 import sys
 
+from ..logging_utils import get_logger, log_error
+
+logger = get_logger(__name__)
+
 
 def validate_probability(
     value: float,
@@ -25,10 +29,24 @@ def validate_probability(
     """
     if allow_zero:
         if not 0 <= value < 1:
+            log_error(
+                logger,
+                "validation_error",
+                f"{name} must be between 0 and 1",
+                parameter=name,
+                value=value,
+            )
             print(f"Error: {name} must be between 0 and 1")
             sys.exit(1)
     else:
         if not 0 < value <= 1:
+            log_error(
+                logger,
+                "validation_error",
+                f"{name} must be between 0 and 1 (exclusive)",
+                parameter=name,
+                value=value,
+            )
             print(f"Error: {name} must be between 0 and 1 (exclusive)")
             sys.exit(1)
 
@@ -45,5 +63,12 @@ def validate_positive(value: float, name: str) -> None:
         SystemExit: If validation fails
     """
     if value <= 0:
+        log_error(
+            logger,
+            "validation_error",
+            f"{name} must be positive",
+            parameter=name,
+            value=value,
+        )
         print(f"Error: {name} must be positive")
         sys.exit(1)

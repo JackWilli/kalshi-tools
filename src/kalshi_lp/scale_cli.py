@@ -6,6 +6,7 @@ Analyzes how ROI changes as position size increases, showing diminishing
 returns from LP score dilution.
 """
 
+import time
 from dataclasses import dataclass
 from typing import List
 
@@ -17,10 +18,13 @@ from .kalshi_client import (
     get_client,
     get_incentive_program_for_ticker,
 )
+from .logging_utils import get_logger, log_analysis_complete, log_analysis_start
 from .lp_math import Side
 from .money import Money
 from .onesided_cli import calculate_onesided_return
 from .orderbook_utils import get_best_bid, sort_orderbook_levels
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -265,9 +269,13 @@ async def run_scale_analysis(
     num_points: int = 20,
 ) -> ScaleAnalysis:
     """Fetch market data and run scale analysis."""
+    start_time = time.time()
+    log_analysis_start(logger, ticker, "scale")
+
     client = get_client()
     try:
         # 1. Find LP program for this ticker
+        logger.debug(f"Fetching LP program for {ticker}")
         program = await get_incentive_program_for_ticker(
             client, ticker, status="active", incentive_type="liquidity"
         )
@@ -283,7 +291,10 @@ async def run_scale_analysis(
         price = get_best_bid(levels)
 
         # 4. Run scale analysis
-        return calculate_scale_analysis(
+        logger.debug(
+            f"Running scale analysis with max_size={max_size}, num_points={num_points}"
+        )
+        result = calculate_scale_analysis(
             ticker=ticker,
             side=side,
             price=price,
@@ -298,6 +309,12 @@ async def run_scale_analysis(
             max_size=max_size,
             num_points=num_points,
         )
+
+        # Log completion
+        duration_ms = (time.time() - start_time) * 1000
+        log_analysis_complete(logger, ticker, "scale", duration_ms)
+
+        return result
     finally:
         await client.close()
 
