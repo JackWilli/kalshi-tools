@@ -69,4 +69,4 @@ def calculate_exponential_weight(
             f"Reference is defined as the highest qualifying bid."
         )
     ticks = ref_price - price
-    return discount_factor ** ticks
+    return discount_factor**ticks
