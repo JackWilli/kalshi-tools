@@ -4,7 +4,7 @@
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.15.4
     hooks:
       # Run the linter
       - id: ruff
@@ -30,3 +30,12 @@ repos:
       - id: end-of-file-fixer
       # Remove trailing whitespace
       - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty type checker
+        entry: uv run ty check src
+        language: system
+        types: [python]
+        pass_filenames: false

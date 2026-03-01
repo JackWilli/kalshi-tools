@@ -74,16 +74,16 @@ def print_portfolio_summary(opportunities: List[MarketOpportunity], top_n: int):
     total_capital = Money.sum([opp.recommended_capital for opp in top_opps])
     total_daily_rewards = Money.sum(
         [
-            opp.get_best_analysis().expected_rewards_per_day
+            best.expected_rewards_per_day
             for opp in top_opps
-            if opp.get_best_analysis() is not None
+            if (best := opp.get_best_analysis()) is not None
         ]
     )
     total_adverse_cost = Money.sum(
         [
-            opp.get_best_analysis().adverse_selection_risk
+            best.adverse_selection_risk
             for opp in top_opps
-            if opp.get_best_analysis() is not None
+            if (best := opp.get_best_analysis()) is not None
         ]
     )
     net_daily_rewards = total_daily_rewards - total_adverse_cost
@@ -206,8 +206,8 @@ async def analyze_incentives(
         # Sort by net ROI (descending)
         filtered_opps.sort(
             key=lambda opp: (
-                opp.get_best_analysis().net_roi_per_day
-                if opp.get_best_analysis() is not None
+                best.net_roi_per_day
+                if (best := opp.get_best_analysis()) is not None
                 else -999
             ),
             reverse=True,
