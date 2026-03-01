@@ -23,11 +23,42 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Check lockfile is up to date
+        run: uv lock --check
+
       - name: Install dependencies
         run: uv sync
 
       - name: Run ruff linting
         run: uv run ruff check src tests
+
+      - name: Run ruff format check
+        run: uv run ruff format --check src tests
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Check lockfile is up to date
+        run: uv lock --check
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run type checking
+        run: uv run ty check src
 
   test:
     name: Test
@@ -44,6 +75,9 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+
+      - name: Check lockfile is up to date
+        run: uv lock --check
 
       - name: Install dependencies
         run: uv sync
