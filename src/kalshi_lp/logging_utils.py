@@ -34,8 +34,9 @@ class HumanReadableFormatter(logging.Formatter):
         ]
 
         # Add extra context if present
-        if hasattr(record, "extra_fields") and record.extra_fields:
-            context_parts = [f"{k}={v}" for k, v in record.extra_fields.items()]
+        extra_fields = getattr(record, "extra_fields", None)
+        if extra_fields and isinstance(extra_fields, dict):
+            context_parts = [f"{k}={v}" for k, v in extra_fields.items()]
             parts.append(f"({', '.join(context_parts)})")
 
         # Add exception info if present
@@ -68,8 +69,9 @@ class JSONFormatter(logging.Formatter):
             log_data["exception"] = self.formatException(record.exc_info)
 
         # Add extra fields from record
-        if hasattr(record, "extra_fields") and record.extra_fields:
-            log_data.update(record.extra_fields)
+        extra_fields = getattr(record, "extra_fields", None)
+        if extra_fields and isinstance(extra_fields, dict):
+            log_data.update(extra_fields)
 
         return json.dumps(log_data)
 
