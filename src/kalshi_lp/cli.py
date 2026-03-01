@@ -15,6 +15,7 @@ Usage:
 import argparse
 import asyncio
 import sys
+from collections.abc import Coroutine
 from typing import Any, Callable
 
 from .logging_utils import configure_logging, get_logger
@@ -24,7 +25,9 @@ configure_logging()
 logger = get_logger(__name__)
 
 
-def async_command_runner(func: Callable, args: Any) -> None:
+def async_command_runner(
+    func: Callable[[Any], Coroutine[Any, Any, None]], args: Any
+) -> None:
     """
     Shared async command runner with error handling.
 
@@ -38,9 +41,9 @@ def async_command_runner(func: Callable, args: Any) -> None:
         SystemExit: Always exits with appropriate code
     """
     try:
-        logger.info(f"Starting command: {func.__name__}")
+        logger.info(f"Starting command: {func.__name__}")  # type: ignore[attr-defined]
         asyncio.run(func(args))
-        logger.info(f"Completed command: {func.__name__}")
+        logger.info(f"Completed command: {func.__name__}")  # type: ignore[attr-defined]
     except KeyboardInterrupt:
         logger.warning(
             "Operation interrupted by user",

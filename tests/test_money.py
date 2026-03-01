@@ -35,7 +35,7 @@ class TestMoneyCreation:
 
     def test_invalid_type_raises(self):
         with pytest.raises(TypeError):
-            Money(12.34)  # Should be int, not float
+            Money(12.34)  # type: ignore[invalid-argument-type]  # Should be int, not float
 
 
 class TestMoneyArithmetic:
@@ -50,7 +50,7 @@ class TestMoneyArithmetic:
     def test_addition_type_error(self):
         m = Money.from_cents(100)
         with pytest.raises(TypeError):
-            _ = m + 50  # Can't add Money + int
+            _ = m + 50  # type: ignore[unsupported-operator]  # Can't add Money + int
 
     def test_subtraction(self):
         m1 = Money.from_cents(100)
@@ -61,7 +61,7 @@ class TestMoneyArithmetic:
     def test_subtraction_type_error(self):
         m = Money.from_cents(100)
         with pytest.raises(TypeError):
-            _ = m - 50  # Can't subtract int from Money
+            _ = m - 50  # type: ignore[unsupported-operator]  # Can't subtract int from Money
 
     def test_multiply_by_int(self):
         m = Money.from_cents(100)
@@ -82,7 +82,7 @@ class TestMoneyArithmetic:
     def test_multiply_type_error(self):
         m = Money.from_cents(100)
         with pytest.raises(TypeError):
-            _ = m * "2"  # Can't multiply by string
+            _ = m * "2"  # type: ignore[unsupported-operator]  # Can't multiply by string
 
     def test_divide_by_money_returns_ratio(self):
         """Money / Money should return float ratio."""
@@ -178,7 +178,7 @@ class TestMoneyComparison:
     def test_compare_with_non_money_raises(self):
         m = Money.from_cents(100)
         with pytest.raises(TypeError):
-            _ = m < 100
+            _ = m < 100  # type: ignore[unsupported-operator]
 
 
 class TestMoneyDisplay:
@@ -266,7 +266,7 @@ class TestMoneyEdgeCases:
         """Test that Money objects are immutable."""
         m = Money.from_cents(100)
         with pytest.raises(AttributeError):
-            m._cents = 200  # Should not be able to modify
+            m._cents = 200  # type: ignore[misc]  # Should not be able to add new attributes
 
 
 class TestMoneyRealisticScenarios:
